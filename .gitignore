@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Files codestory generates while you test it. Keep your own bundles out of the repository:
+# they contain source code and sample rows of data.
+codestory_bundle.json
+storyboard.json
+story.html
+*.skill
+
+# ...except the published examples
+!examples/**/codestory_bundle.json
+!examples/**/storyboard.json
+!examples/**/story.html
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

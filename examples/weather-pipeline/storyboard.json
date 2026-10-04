@@ -1,0 +1,1590 @@
+{
+ "schema": "codestory.storyboard/1",
+ "title": "Daily weather pipeline",
+ "subtitle": "Raw sensor readings become a cleaned daily summary per station, a report, a database table and an alert.",
+ "mode": "run",
+ "entry": "main.py --date 2026-10-01 --full-refresh",
+ "run": {
+  "status": "ok",
+  "started_at": "2026-10-03T21:02:08+00:00",
+  "duration_ms": 619.4,
+  "args": [
+   "--date",
+   "2026-10-01",
+   "--full-refresh"
+  ],
+  "safe_mode": true
+ },
+ "scenes": [
+  {
+   "id": "imports",
+   "phase": "imports",
+   "title": "Bring in the tools",
+   "narration": "The pipeline loads three packages for data, numbers and web requests, a few of Python's built-in modules, and five files of its own.",
+   "items": [
+    {
+     "label": "pandas",
+     "kind": "third_party",
+     "note": "tables"
+    },
+    {
+     "label": "numpy",
+     "kind": "third_party",
+     "note": "math"
+    },
+    {
+     "label": "requests",
+     "kind": "third_party",
+     "note": "web calls"
+    },
+    {
+     "label": "argparse",
+     "kind": "stdlib"
+    },
+    {
+     "label": "logging",
+     "kind": "stdlib"
+    },
+    {
+     "label": "datetime",
+     "kind": "stdlib"
+    },
+    {
+     "label": "sqlite3",
+     "kind": "stdlib"
+    },
+    {
+     "label": "os",
+     "kind": "stdlib"
+    },
+    {
+     "label": "config",
+     "kind": "project"
+    },
+    {
+     "label": "etl.extract",
+     "kind": "project"
+    },
+    {
+     "label": "etl.clean",
+     "kind": "project"
+    },
+    {
+     "label": "etl.transform",
+     "kind": "project"
+    },
+    {
+     "label": "etl.load",
+     "kind": "project"
+    }
+   ]
+  },
+  {
+   "id": "constants",
+   "phase": "constants",
+   "title": "Read the settings",
+   "narration": "config.py fixes where data lives and the limits used later: temperatures outside −40 to 55 °C are impossible, and a station is unusual when it sits 1.4 standard deviations from its region.",
+   "items": [
+    {
+     "label": "INPUT_CSV",
+     "value": "data/readings.csv",
+     "kind": "constant"
+    },
+    {
+     "label": "STATIONS_DB",
+     "value": "data/stations.db",
+     "kind": "constant"
+    },
+    {
+     "label": "OUTPUT_DIR",
+     "value": "output",
+     "kind": "constant"
+    },
+    {
+     "label": "MIN_TEMP_C",
+     "value": "-40.0",
+     "kind": "constant"
+    },
+    {
+     "label": "MAX_TEMP_C",
+     "value": "55.0",
+     "kind": "constant"
+    },
+    {
+     "label": "ANOMALY_Z",
+     "value": "1.4",
+     "kind": "constant"
+    },
+    {
+     "label": "ALERT_WEBHOOK",
+     "value": "hooks.example.com/weather-alerts",
+     "kind": "config",
+     "note": "default; env var not set"
+    },
+    {
+     "label": "API_TOKEN",
+     "value": "••••••",
+     "kind": "secret"
+    }
+   ]
+  },
+  {
+   "id": "args",
+   "phase": "setup",
+   "title": "Read the command line",
+   "narration": "main() starts by reading its options. This run is for 1 October 2026 and asks for a full refresh of the database table.",
+   "inputs": [
+    {
+     "kind": "config",
+     "label": "Command line",
+     "sublabel": "--date 2026-10-01 --full-refresh"
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "parse_args()",
+    "sublabel": "main.py",
+    "code": {
+     "file": "main.py",
+     "line": 16,
+     "snippet": "def parse_args():\n    p = argparse.ArgumentParser()\n    p.add_argument(\"--date\", default=str(date.today()))\n    p.add_argument(\"--full-refresh\", action=\"store_true\")\n    p.add_argument(\"--no-alerts\", action=\"store_true\")\n    return p.parse_args()",
+     "highlight": [
+      16,
+      21
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "config",
+     "label": "Options",
+     "sublabel": "date 2026-10-01, full refresh on, alerts on"
+    }
+   ]
+  },
+  {
+   "id": "read-readings",
+   "phase": "input",
+   "title": "Load the sensor readings",
+   "narration": "Every reading from the daily CSV drop is loaded into a table: 601 rows of station, time, temperature and unit.",
+   "inputs": [
+    {
+     "kind": "file",
+     "label": "readings.csv",
+     "sublabel": "data/readings.csv"
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "read_readings()",
+    "sublabel": "etl/extract.py",
+    "code": {
+     "file": "etl/extract.py",
+     "line": 5,
+     "snippet": "def read_readings(path):\n    \"\"\"Load raw sensor readings from the daily CSV drop.\"\"\"\n    df = pd.read_csv(path, parse_dates=[\"timestamp\"])\n    return df",
+     "highlight": [
+      7
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "data",
+     "label": "raw",
+     "data": {
+      "rows": 601,
+      "cols": 4,
+      "columns": [
+       "station_id",
+       "timestamp",
+       "temp",
+       "unit"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "timestamp",
+        "temp",
+        "unit"
+       ],
+       "rows": [
+        [
+         "ST09",
+         "2026-09-30 18:00:00",
+         "26.2",
+         "C"
+        ],
+        [
+         "ST01",
+         "2026-09-30 07:00:00",
+         "5.5",
+         "C"
+        ],
+        [
+         "ST07",
+         "2026-09-30 04:00:00",
+         "17.1",
+         "C"
+        ]
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "load-stations",
+   "phase": "input",
+   "title": "Look up the stations",
+   "narration": "Station names, regions and elevations come from a SQLite database. Safe mode opened a working copy, so the real file was never touched.",
+   "inputs": [
+    {
+     "kind": "database",
+     "label": "stations",
+     "sublabel": "data/stations.db",
+     "status": "sandboxed",
+     "detail": "Opened as a working copy in the sandbox."
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "load_stations()",
+    "sublabel": "etl/extract.py",
+    "code": {
+     "file": "etl/extract.py",
+     "line": 11,
+     "snippet": "def load_stations(db_path):\n    \"\"\"Fetch station metadata (name, region, elevation).\"\"\"\n    with sqlite3.connect(db_path) as conn:\n        return pd.read_sql_query(\"SELECT station_id, name, region, elevation_m FROM stations\", conn)",
+     "highlight": [
+      14
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "data",
+     "label": "stations",
+     "data": {
+      "rows": 12,
+      "cols": 4,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "elevation_m"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "elevation_m"
+       ],
+       "rows": [
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "820"
+        ],
+        [
+         "ST02",
+         "Lakeside",
+         "North",
+         "210"
+        ],
+        [
+         "ST03",
+         "Old Mill",
+         "North",
+         "340"
+        ]
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "clean",
+   "phase": "transform",
+   "title": "Clean the readings",
+   "narration": "Three cleaning steps run in order. Together they remove 49 rows, leaving 552 trustworthy readings.",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "raw",
+     "data": {
+      "rows": 601,
+      "cols": 4,
+      "columns": [
+       "station_id",
+       "timestamp",
+       "temp",
+       "unit"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "timestamp",
+        "temp",
+        "unit"
+       ],
+       "rows": [
+        [
+         "ST09",
+         "2026-09-30 18:00:00",
+         "26.2",
+         "C"
+        ],
+        [
+         "ST01",
+         "2026-09-30 07:00:00",
+         "5.5",
+         "C"
+        ],
+        [
+         "ST07",
+         "2026-09-30 04:00:00",
+         "17.1",
+         "C"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "clean()",
+    "sublabel": "etl/clean.py",
+    "code": {
+     "file": "etl/clean.py",
+     "line": 24,
+     "snippet": "def clean(df):\n    for step in (to_celsius, drop_invalid, dedupe):\n        df = step(df)\n    return df",
+     "highlight": [
+      25,
+      26
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "data",
+     "label": "readings",
+     "data": {
+      "rows": 552,
+      "cols": 4,
+      "columns": [
+       "station_id",
+       "timestamp",
+       "temp",
+       "unit"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "timestamp",
+        "temp",
+        "unit"
+       ],
+       "rows": [
+        [
+         "ST09",
+         "2026-09-30 18:00:00",
+         "26.2",
+         "C"
+        ],
+        [
+         "ST01",
+         "2026-09-30 07:00:00",
+         "5.5",
+         "C"
+        ],
+        [
+         "ST07",
+         "2026-09-30 04:00:00",
+         "17.1",
+         "C"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "stats": [
+    {
+     "label": "Rows in",
+     "value": 601
+    },
+    {
+     "label": "Rows kept",
+     "value": 552,
+     "delta": -49
+    }
+   ],
+   "children": [
+    {
+     "id": "to-celsius",
+     "phase": "transform",
+     "title": "Convert Fahrenheit to Celsius",
+     "narration": "Two coastal stations report in Fahrenheit. Their values are converted so every row uses Celsius. No rows are removed.",
+     "inputs": [
+      {
+       "kind": "data",
+       "label": "raw",
+       "data": {
+        "rows": 601,
+        "cols": 4,
+        "columns": [
+         "station_id",
+         "timestamp",
+         "temp",
+         "unit"
+        ],
+        "sample": {
+         "columns": [
+          "station_id",
+          "timestamp",
+          "temp",
+          "unit"
+         ],
+         "rows": [
+          [
+           "ST09",
+           "2026-09-30 18:00:00",
+           "26.2",
+           "C"
+          ],
+          [
+           "ST01",
+           "2026-09-30 07:00:00",
+           "5.5",
+           "C"
+          ],
+          [
+           "ST07",
+           "2026-09-30 04:00:00",
+           "17.1",
+           "C"
+          ]
+         ]
+        }
+       }
+      }
+     ],
+     "actor": {
+      "kind": "function",
+      "label": "to_celsius()",
+      "sublabel": "etl/clean.py",
+      "code": {
+       "file": "etl/clean.py",
+       "line": 4,
+       "snippet": "def to_celsius(df):\n    \"\"\"Some stations report Fahrenheit; convert them.\"\"\"\n    df = df.copy()\n    f = df[\"unit\"] == \"F\"\n    df.loc[f, \"temp\"] = (df.loc[f, \"temp\"] - 32) * 5 / 9\n    df[\"unit\"] = \"C\"\n    return df",
+       "highlight": [
+        7,
+        8
+       ]
+      }
+     },
+     "outputs": [
+      {
+       "kind": "data",
+       "label": "in Celsius",
+       "data": {
+        "rows": 601,
+        "cols": 4,
+        "columns": [
+         "station_id",
+         "timestamp",
+         "temp",
+         "unit"
+        ],
+        "sample": {
+         "columns": [
+          "station_id",
+          "timestamp",
+          "temp",
+          "unit"
+         ],
+         "rows": [
+          [
+           "ST09",
+           "2026-09-30 18:00:00",
+           "26.2",
+           "C"
+          ],
+          [
+           "ST01",
+           "2026-09-30 07:00:00",
+           "5.5",
+           "C"
+          ],
+          [
+           "ST07",
+           "2026-09-30 04:00:00",
+           "17.1",
+           "C"
+          ]
+         ]
+        }
+       }
+      }
+     ]
+    },
+    {
+     "id": "drop-invalid",
+     "phase": "transform",
+     "title": "Drop impossible temperatures",
+     "narration": "Rows with a missing temperature or a value outside −40 to 55 °C are removed: 25 rows, including the sensor glitches that read 999.",
+     "inputs": [
+      {
+       "kind": "data",
+       "label": "in Celsius",
+       "data": {
+        "rows": 601,
+        "cols": 4,
+        "columns": [
+         "station_id",
+         "timestamp",
+         "temp",
+         "unit"
+        ],
+        "sample": {
+         "columns": [
+          "station_id",
+          "timestamp",
+          "temp",
+          "unit"
+         ],
+         "rows": [
+          [
+           "ST09",
+           "2026-09-30 18:00:00",
+           "26.2",
+           "C"
+          ],
+          [
+           "ST01",
+           "2026-09-30 07:00:00",
+           "5.5",
+           "C"
+          ],
+          [
+           "ST07",
+           "2026-09-30 04:00:00",
+           "17.1",
+           "C"
+          ]
+         ]
+        }
+       }
+      }
+     ],
+     "actor": {
+      "kind": "function",
+      "label": "drop_invalid()",
+      "sublabel": "etl/clean.py",
+      "code": {
+       "file": "etl/clean.py",
+       "line": 13,
+       "snippet": "def drop_invalid(df):\n    \"\"\"Remove missing values and physically impossible temperatures.\"\"\"\n    df = df.dropna(subset=[\"temp\", \"station_id\"])\n    return df[(df[\"temp\"] >= MIN_TEMP_C) & (df[\"temp\"] <= MAX_TEMP_C)]",
+       "highlight": [
+        15,
+        16
+       ]
+      }
+     },
+     "outputs": [
+      {
+       "kind": "data",
+       "label": "valid",
+       "data": {
+        "rows": 576,
+        "cols": 4,
+        "columns": [
+         "station_id",
+         "timestamp",
+         "temp",
+         "unit"
+        ],
+        "sample": {
+         "columns": [
+          "station_id",
+          "timestamp",
+          "temp",
+          "unit"
+         ],
+         "rows": [
+          [
+           "ST09",
+           "2026-09-30 18:00:00",
+           "26.2",
+           "C"
+          ],
+          [
+           "ST01",
+           "2026-09-30 07:00:00",
+           "5.5",
+           "C"
+          ],
+          [
+           "ST07",
+           "2026-09-30 04:00:00",
+           "17.1",
+           "C"
+          ]
+         ]
+        }
+       }
+      }
+     ],
+     "stats": [
+      {
+       "label": "Rows removed",
+       "value": 25
+      }
+     ]
+    },
+    {
+     "id": "dedupe",
+     "phase": "transform",
+     "title": "Remove resent readings",
+     "narration": "Some sensors send the same reading twice. Keeping the first copy of each station and timestamp removes 24 duplicates.",
+     "inputs": [
+      {
+       "kind": "data",
+       "label": "valid",
+       "data": {
+        "rows": 576,
+        "cols": 4,
+        "columns": [
+         "station_id",
+         "timestamp",
+         "temp",
+         "unit"
+        ],
+        "sample": {
+         "columns": [
+          "station_id",
+          "timestamp",
+          "temp",
+          "unit"
+         ],
+         "rows": [
+          [
+           "ST09",
+           "2026-09-30 18:00:00",
+           "26.2",
+           "C"
+          ],
+          [
+           "ST01",
+           "2026-09-30 07:00:00",
+           "5.5",
+           "C"
+          ],
+          [
+           "ST07",
+           "2026-09-30 04:00:00",
+           "17.1",
+           "C"
+          ]
+         ]
+        }
+       }
+      }
+     ],
+     "actor": {
+      "kind": "function",
+      "label": "dedupe()",
+      "sublabel": "etl/clean.py",
+      "code": {
+       "file": "etl/clean.py",
+       "line": 19,
+       "snippet": "def dedupe(df):\n    \"\"\"Sensors sometimes resend a reading; keep the first.\"\"\"\n    return df.drop_duplicates(subset=[\"station_id\", \"timestamp\"], keep=\"first\")",
+       "highlight": [
+        21
+       ]
+      }
+     },
+     "outputs": [
+      {
+       "kind": "data",
+       "label": "readings",
+       "data": {
+        "rows": 552,
+        "cols": 4,
+        "columns": [
+         "station_id",
+         "timestamp",
+         "temp",
+         "unit"
+        ],
+        "sample": {
+         "columns": [
+          "station_id",
+          "timestamp",
+          "temp",
+          "unit"
+         ],
+         "rows": [
+          [
+           "ST09",
+           "2026-09-30 18:00:00",
+           "26.2",
+           "C"
+          ],
+          [
+           "ST01",
+           "2026-09-30 07:00:00",
+           "5.5",
+           "C"
+          ],
+          [
+           "ST07",
+           "2026-09-30 04:00:00",
+           "17.1",
+           "C"
+          ]
+         ]
+        }
+       }
+      }
+     ],
+     "stats": [
+      {
+       "label": "Duplicates removed",
+       "value": 24
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "enrich",
+   "phase": "transform",
+   "title": "Attach station details",
+   "narration": "Each reading is matched to its station, adding name, region and elevation. Still 552 rows, now with 7 columns.",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "readings",
+     "data": {
+      "rows": 552,
+      "cols": 4,
+      "columns": [
+       "station_id",
+       "timestamp",
+       "temp",
+       "unit"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "timestamp",
+        "temp",
+        "unit"
+       ],
+       "rows": [
+        [
+         "ST09",
+         "2026-09-30 18:00:00",
+         "26.2",
+         "C"
+        ],
+        [
+         "ST01",
+         "2026-09-30 07:00:00",
+         "5.5",
+         "C"
+        ],
+        [
+         "ST07",
+         "2026-09-30 04:00:00",
+         "17.1",
+         "C"
+        ]
+       ]
+      }
+     }
+    },
+    {
+     "kind": "data",
+     "label": "stations",
+     "data": {
+      "rows": 12,
+      "cols": 4,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "elevation_m"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "elevation_m"
+       ],
+       "rows": [
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "820"
+        ],
+        [
+         "ST02",
+         "Lakeside",
+         "North",
+         "210"
+        ],
+        [
+         "ST03",
+         "Old Mill",
+         "North",
+         "340"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "enrich()",
+    "sublabel": "etl/transform.py",
+    "code": {
+     "file": "etl/transform.py",
+     "line": 5,
+     "snippet": "def enrich(df, stations):\n    \"\"\"Attach station name and region to every reading.\"\"\"\n    return df.merge(stations, on=\"station_id\", how=\"left\")",
+     "highlight": [
+      7
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "data",
+     "label": "enriched",
+     "data": {
+      "rows": 552,
+      "cols": 7,
+      "columns": [
+       "station_id",
+       "timestamp",
+       "temp",
+       "unit",
+       "name",
+       "region",
+       "elevation_m"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "timestamp",
+        "temp",
+        "unit",
+        "name",
+        "region",
+        "elevation_m"
+       ],
+       "rows": [
+        [
+         "ST09",
+         "2026-09-30 18:00:00",
+         "26.2",
+         "C",
+         "Canyon Floor",
+         "South",
+         "410"
+        ],
+        [
+         "ST01",
+         "2026-09-30 07:00:00",
+         "5.5",
+         "C",
+         "Ridge Point",
+         "North",
+         "820"
+        ],
+        [
+         "ST07",
+         "2026-09-30 04:00:00",
+         "17.1",
+         "C",
+         "Dune Field",
+         "South",
+         "150"
+        ]
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "daily-summary",
+   "phase": "transform",
+   "title": "Summarize each station's day",
+   "narration": "Readings are grouped by station and day, then reduced to the minimum, maximum and average temperature: 12 stations over 2 days gives 24 rows.",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "enriched",
+     "data": {
+      "rows": 552,
+      "cols": 7,
+      "columns": [
+       "station_id",
+       "timestamp",
+       "temp",
+       "unit",
+       "name",
+       "region",
+       "elevation_m"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "timestamp",
+        "temp",
+        "unit",
+        "name",
+        "region",
+        "elevation_m"
+       ],
+       "rows": [
+        [
+         "ST09",
+         "2026-09-30 18:00:00",
+         "26.2",
+         "C",
+         "Canyon Floor",
+         "South",
+         "410"
+        ],
+        [
+         "ST01",
+         "2026-09-30 07:00:00",
+         "5.5",
+         "C",
+         "Ridge Point",
+         "North",
+         "820"
+        ],
+        [
+         "ST07",
+         "2026-09-30 04:00:00",
+         "17.1",
+         "C",
+         "Dune Field",
+         "South",
+         "150"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "daily_summary()",
+    "sublabel": "etl/transform.py",
+    "code": {
+     "file": "etl/transform.py",
+     "line": 10,
+     "snippet": "def daily_summary(df):\n    \"\"\"One row per station per day: min, max, mean temperature.\"\"\"\n    df = df.assign(day=df[\"timestamp\"].dt.date)\n    out = (df.groupby([\"station_id\", \"name\", \"region\", \"day\"])[\"temp\"]\n             .agg([\"min\", \"max\", \"mean\", \"count\"]).reset_index())\n    out[\"mean\"] = out[\"mean\"].round(2)\n    return out",
+     "highlight": [
+      13,
+      14
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "data",
+     "label": "summary",
+     "data": {
+      "rows": 24,
+      "cols": 8,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "day",
+       "min",
+       "max",
+       "mean",
+       "count"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "day",
+        "min",
+        "max",
+        "mean",
+        "count"
+       ],
+       "rows": [
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-09-30",
+         "1.1",
+         "14.6",
+         "7.87",
+         "24"
+        ],
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-10-01",
+         "1.4",
+         "15.5",
+         "7.96",
+         "24"
+        ],
+        [
+         "ST02",
+         "Lakeside",
+         "North",
+         "2026-09-30",
+         "0.4",
+         "13.8",
+         "8.12",
+         "23"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "stats": [
+    {
+     "label": "Readings",
+     "value": 552
+    },
+    {
+     "label": "Summary rows",
+     "value": 24
+    }
+   ]
+  },
+  {
+   "id": "anomalies",
+   "phase": "transform",
+   "title": "Find unusual stations",
+   "narration": "Each station's daily average is compared with its region. Mesa Top runs far hotter than its neighbours, so 3 rows are flagged.",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "summary",
+     "data": {
+      "rows": 24,
+      "cols": 8,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "day",
+       "min",
+       "max",
+       "mean",
+       "count"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "day",
+        "min",
+        "max",
+        "mean",
+        "count"
+       ],
+       "rows": [
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-09-30",
+         "1.1",
+         "14.6",
+         "7.87",
+         "24"
+        ],
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-10-01",
+         "1.4",
+         "15.5",
+         "7.96",
+         "24"
+        ],
+        [
+         "ST02",
+         "Lakeside",
+         "North",
+         "2026-09-30",
+         "0.4",
+         "13.8",
+         "8.12",
+         "23"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "flag_anomalies()",
+    "sublabel": "etl/transform.py",
+    "code": {
+     "file": "etl/transform.py",
+     "line": 19,
+     "snippet": "def flag_anomalies(summary):\n    \"\"\"Stations whose daily mean is far from their region's mean.\"\"\"\n    g = summary.groupby(\"region\")[\"mean\"]\n    z = (summary[\"mean\"] - g.transform(\"mean\")) / g.transform(\"std\").replace(0, np.nan)\n    return summary[z.abs() > ANOMALY_Z].copy()",
+     "highlight": [
+      22,
+      23
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "data",
+     "label": "anomalies",
+     "data": {
+      "rows": 3,
+      "cols": 8,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "day",
+       "min",
+       "max",
+       "mean",
+       "count"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "day",
+        "min",
+        "max",
+        "mean",
+        "count"
+       ],
+       "rows": [
+        [
+         "ST03",
+         "Old Mill",
+         "North",
+         "2026-10-01",
+         "1.9",
+         "16.2",
+         "8.25",
+         "22"
+        ],
+        [
+         "ST08",
+         "Mesa Top",
+         "South",
+         "2026-09-30",
+         "29.2",
+         "43.8",
+         "35.88",
+         "23"
+        ],
+        [
+         "ST08",
+         "Mesa Top",
+         "South",
+         "2026-10-01",
+         "29.3",
+         "42.2",
+         "36.06",
+         "24"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "stats": [
+    {
+     "label": "Flagged",
+     "value": 3
+    }
+   ]
+  },
+  {
+   "id": "write-report",
+   "phase": "output",
+   "title": "Write the CSV report",
+   "narration": "The 24-row summary is saved as a dated CSV report. In safe mode the file went to the sandbox instead of the output folder.",
+   "status": "sandboxed",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "summary",
+     "data": {
+      "rows": 24,
+      "cols": 8,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "day",
+       "min",
+       "max",
+       "mean",
+       "count"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "day",
+        "min",
+        "max",
+        "mean",
+        "count"
+       ],
+       "rows": [
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-09-30",
+         "1.1",
+         "14.6",
+         "7.87",
+         "24"
+        ],
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-10-01",
+         "1.4",
+         "15.5",
+         "7.96",
+         "24"
+        ],
+        [
+         "ST02",
+         "Lakeside",
+         "North",
+         "2026-09-30",
+         "0.4",
+         "13.8",
+         "8.12",
+         "23"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "write_report()",
+    "sublabel": "etl/load.py",
+    "code": {
+     "file": "etl/load.py",
+     "line": 7,
+     "snippet": "def write_report(summary, run_date):\n    os.makedirs(OUTPUT_DIR, exist_ok=True)\n    path = os.path.join(OUTPUT_DIR, f\"daily_summary_{run_date}.csv\")\n    summary.to_csv(path, index=False)\n    return path",
+     "highlight": [
+      10
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "file",
+     "label": "daily_summary_2026-10-01.csv",
+     "sublabel": "output/",
+     "status": "sandboxed",
+     "data": {
+      "rows": 24,
+      "cols": 8
+     },
+     "detail": "Written to the codestory sandbox, not the real output folder."
+    }
+   ]
+  },
+  {
+   "id": "save-summary",
+   "phase": "output",
+   "title": "Save the summary to the database",
+   "narration": "Because a full refresh was requested, the table is emptied first, then the 24 summary rows are inserted. Both steps ran against the sandbox copy.",
+   "status": "sandboxed",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "summary",
+     "data": {
+      "rows": 24,
+      "cols": 8,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "day",
+       "min",
+       "max",
+       "mean",
+       "count"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "day",
+        "min",
+        "max",
+        "mean",
+        "count"
+       ],
+       "rows": [
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-09-30",
+         "1.1",
+         "14.6",
+         "7.87",
+         "24"
+        ],
+        [
+         "ST01",
+         "Ridge Point",
+         "North",
+         "2026-10-01",
+         "1.4",
+         "15.5",
+         "7.96",
+         "24"
+        ],
+        [
+         "ST02",
+         "Lakeside",
+         "North",
+         "2026-09-30",
+         "0.4",
+         "13.8",
+         "8.12",
+         "23"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "save_summary()",
+    "sublabel": "etl/load.py",
+    "code": {
+     "file": "etl/load.py",
+     "line": 14,
+     "snippet": "def save_summary(summary, full_refresh=False):\n    with sqlite3.connect(STATIONS_DB) as conn:\n        if full_refresh:\n            conn.execute(\"DELETE FROM daily_summary\")\n        summary.assign(day=summary[\"day\"].astype(str)).to_sql(\"daily_summary\", conn, if_exists=\"append\", index=False)\n        return len(summary)",
+     "highlight": [
+      16,
+      17,
+      18
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "database",
+     "label": "daily_summary",
+     "sublabel": "data/stations.db: 1 delete, 24 inserts",
+     "status": "sandboxed",
+     "data": {
+      "rows": 24,
+      "cols": 8
+     }
+    }
+   ],
+   "stats": [
+    {
+     "label": "Rows inserted",
+     "value": 24
+    }
+   ]
+  },
+  {
+   "id": "alert-decision",
+   "phase": "branch",
+   "title": "Decide whether to alert",
+   "narration": "There are 3 anomalies and alerts were not switched off, so the pipeline sends an alert.",
+   "actor": {
+    "kind": "function",
+    "label": "main()",
+    "code": {
+     "file": "main.py",
+     "line": 24,
+     "snippet": "def main():\n    args = parse_args()\n    raw = read_readings(INPUT_CSV)\n    stations = load_stations(STATIONS_DB)\n    log.info(\"loaded %d readings from %d stations\", len(raw), len(stations))\n\n    readings = clean(raw)\n    summary = daily_summary(enrich(readings, stations))\n    anomalies = flag_anomalies(summary)\n\n    report = load.write_report(summary, args.date)\n    saved = load.save_summary(summary, full_refresh=args.full_refresh)\n    log.info(\"wrote %s and %d rows to the database\", report, saved)\n\n    if len(anomalies) and not args.no_alerts:\n        load.send_alert(anomalies)\n        log.info(\"alerted on %d anomalies\", len(anomalies))\n    else:\n        log.info(\"no alerts sent\")",
+     "highlight": [
+      38
+     ]
+    }
+   },
+   "branch": {
+    "condition": "len(anomalies) and not args.no_alerts",
+    "question": "Any anomalies, and are alerts allowed?",
+    "paths": [
+     {
+      "label": "Send an alert",
+      "status": "taken",
+      "goto": "send-alert"
+     },
+     {
+      "label": "Log “no alerts sent”",
+      "status": "not_taken"
+     }
+    ]
+   }
+  },
+  {
+   "id": "send-alert",
+   "phase": "output",
+   "title": "Post the alert",
+   "narration": "The three flagged rows are posted to the alerts webhook. Safe mode blocked the request and handed back a fake success, so nobody was paged.",
+   "status": "sandboxed",
+   "inputs": [
+    {
+     "kind": "data",
+     "label": "anomalies",
+     "data": {
+      "rows": 3,
+      "cols": 8,
+      "columns": [
+       "station_id",
+       "name",
+       "region",
+       "day",
+       "min",
+       "max",
+       "mean",
+       "count"
+      ],
+      "sample": {
+       "columns": [
+        "station_id",
+        "name",
+        "region",
+        "day",
+        "min",
+        "max",
+        "mean",
+        "count"
+       ],
+       "rows": [
+        [
+         "ST03",
+         "Old Mill",
+         "North",
+         "2026-10-01",
+         "1.9",
+         "16.2",
+         "8.25",
+         "22"
+        ],
+        [
+         "ST08",
+         "Mesa Top",
+         "South",
+         "2026-09-30",
+         "29.2",
+         "43.8",
+         "35.88",
+         "23"
+        ],
+        [
+         "ST08",
+         "Mesa Top",
+         "South",
+         "2026-10-01",
+         "29.3",
+         "42.2",
+         "36.06",
+         "24"
+        ]
+       ]
+      }
+     }
+    }
+   ],
+   "actor": {
+    "kind": "function",
+    "label": "send_alert()",
+    "sublabel": "etl/load.py",
+    "code": {
+     "file": "etl/load.py",
+     "line": 22,
+     "snippet": "def send_alert(anomalies):\n    payload = {\"count\": len(anomalies),\n               \"stations\": anomalies[[\"station_id\", \"name\", \"mean\"]].to_dict(orient=\"records\")}\n    r = requests.post(ALERT_WEBHOOK, json=payload, timeout=10)\n    return r.status_code",
+     "highlight": [
+      25
+     ]
+    }
+   },
+   "outputs": [
+    {
+     "kind": "api",
+     "label": "POST weather-alerts",
+     "sublabel": "hooks.example.com",
+     "status": "blocked",
+     "data": {
+      "shape": "3 stations"
+     },
+     "detail": "Blocked by safe mode. The program received a fake 200 OK response."
+    }
+   ]
+  }
+ ],
+ "summary": {
+  "headline": "601 readings became a 24-row daily summary and one alert.",
+  "stats": [
+   {
+    "label": "Readings in",
+    "value": 601
+   },
+   {
+    "label": "Kept after cleaning",
+    "value": 552
+   },
+   {
+    "label": "Summary rows",
+    "value": 24
+   },
+   {
+    "label": "Anomalies",
+    "value": 3
+   }
+  ],
+  "notes": [
+   "Safe mode held 3 side effects: the CSV report, 25 database changes and the webhook post.",
+   "Run again with --live to write for real."
+  ]
+ }
+}

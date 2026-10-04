@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Code story</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #E7ECEF; --panel: #FBFCFD; --panel-2: #F1F4F6; --ink: #17212B; --muted: #5D6A78; --rule: #C5CFD8;
+  --setup: #56657A; --imports: #2F64D6; --constants: #8A3FB3; --definitions: #0E8A8A; --input: #23924A;
+  --transform: #C97700; --branch: #56657A; --output: #D23C34; --finish: #17212B; --error: #D23C34;
+  --token-ink: #FFFFFF;
+  --sans: "Overpass", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Overpass Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0F151B; --panel: #172029; --panel-2: #1D2833; --ink: #E3E9EF; --muted: #8F9CAA; --rule: #2B3845;
+    --setup: #8796AA; --imports: #6F98F2; --constants: #B57CD9; --definitions: #3CC2C0; --input: #4CC777;
+    --transform: #F2A73B; --branch: #8796AA; --output: #F06A5F; --finish: #E3E9EF; --error: #F06A5F; --token-ink: #0F151B;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0F151B; --panel: #172029; --panel-2: #1D2833; --ink: #E3E9EF; --muted: #8F9CAA; --rule: #2B3845;
+  --setup: #8796AA; --imports: #6F98F2; --constants: #B57CD9; --definitions: #3CC2C0; --input: #4CC777;
+  --transform: #F2A73B; --branch: #8796AA; --output: #F06A5F; --finish: #E3E9EF; --error: #F06A5F; --token-ink: #0F151B;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font-family: var(--sans);
+  font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--imports); outline-offset: 2px; border-radius: 4px; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+.app > * { min-width: 0; }
+
+/* masthead */
+.mast { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 18px 0 10px; }
+.mast h1 { margin: 0; font-size: clamp(20px, 2.6vw, 28px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.1; }
+.mast p { margin: 4px 0 0; color: var(--muted); font-size: 15px; max-width: 70ch; }
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+  border: 1.5px solid var(--rule); background: var(--panel); font-size: 14px; white-space: nowrap; }
+.badge i { width: 9px; height: 9px; border-radius: 50%; background: var(--input); }
+.badge.err i { background: var(--error); }
+.badge.scan i { background: transparent; border: 2px solid var(--muted); }
+
+/* transit line */
+.line-wrap { overflow-x: auto; overflow-y: hidden; padding: 6px 0 2px; scrollbar-width: thin; }
+.line-wrap svg { display: block; height: 44px; }
+.station { cursor: pointer; }
+.station:focus-visible { outline: none; }
+.station:focus-visible circle.st-base { stroke-width: 4; }
+.line-caption { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 14px; min-height: 22px; }
+.line-caption strong { color: var(--ink); font-weight: 600; }
+
+/* stage */
+.stage { position: relative; min-height: 0; margin: 8px 0 10px; }
+.layer { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto; gap: 14px;
+  background: var(--panel); border: 1.5px solid var(--rule); border-radius: 14px; padding: 20px 24px 18px 30px;
+  overflow: hidden; visibility: hidden; }
+.layer::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--phase); }
+.layer.sub { margin-left: 22px; }
+.layer.dim .flow, .layer.dim .grid, .layer.dim .branchbox { filter: saturate(.25); opacity: .72; }
+.scene-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.phase-chip { display: inline-flex; align-items: center; gap: 7px; color: var(--phase); font-weight: 600; font-size: 15px; }
+.phase-chip i { width: 18px; height: 5px; border-radius: 3px; background: var(--phase); }
+.scene-head h2 { margin: 0; font-size: clamp(20px, 2.4vw, 30px); font-weight: 800; letter-spacing: -0.012em; line-height: 1.15; }
+.crumb { color: var(--muted); font-size: 14px; }
+.status { margin-left: auto; font-size: 14px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.status.skipped::before, .status.possible::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px dashed var(--muted); }
+.status.sandboxed::before { content: ""; width: 10px; height: 10px; border-radius: 2px; border: 2px dashed var(--phase); }
+.status.failed { color: var(--error); font-weight: 600; }
+
+.flow { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 56px; align-items: center; min-height: 0; }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.col.empty { visibility: hidden; }
+
+/* cards */
+.card { position: relative; z-index: 1; background: var(--panel-2); border: 1.5px solid var(--rule); border-radius: 10px;
+  padding: 12px 14px; text-align: left; cursor: pointer; min-width: 0; transition: border-color .15s; }
+.card:hover { border-color: var(--phase); }
+.card .k { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.card .k svg { width: 14px; height: 14px; flex: none; }
+.card .l { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+.card .s { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.card.sandboxed, .card.blocked { border-style: dashed; border-color: var(--phase); }
+.card.skipped, .card.possible { border-style: dashed; }
+.card .flag { margin-top: 6px; font-size: 13px; color: var(--phase); }
+.card .shape { margin-top: 6px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card table { margin-top: 8px; border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 11.5px; table-layout: fixed; }
+.card th, .card td { padding: 2px 6px 2px 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--rule); }
+.actor { background: var(--panel); border-width: 2px; border-color: var(--phase); padding: 14px 16px 12px; }
+.actor .l { font-size: 19px; font-family: var(--mono); font-weight: 600; }
+.actor .pulse { position: absolute; inset: -7px; border-radius: 14px; border: 2px solid var(--phase); opacity: 0; pointer-events: none; }
+.code { margin: 10px 0 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: var(--ink);
+  background: var(--panel-2); border-radius: 6px; padding: 8px 0; overflow: hidden; }
+.code .ln { display: block; padding: 0 10px 0 0; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.code .ln b { display: inline-block; width: 3.2em; padding-right: .9em; text-align: right; color: var(--muted); font-weight: 400; }
+.code .ln.hl { background: color-mix(in srgb, var(--phase) 16%, transparent); box-shadow: inset 3px 0 0 var(--phase); }
+
+/* grid scenes */
+.grid { display: flex; flex-direction: column; gap: 14px; overflow: auto; align-content: start; }
+.group h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 8px; background: var(--panel-2);
+  border: 1.5px solid var(--rule); font-size: 15px; max-width: 100%; }
+.chip .cv { font-family: var(--mono); font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.project, .chip.function, .chip.constant { border-color: var(--phase); }
+.chip.secret .cv { letter-spacing: .15em; }
+.chip.skipped, .chip.possible { border-style: dashed; color: var(--muted); }
+.chip small { color: var(--muted); font-size: 12.5px; }
+
+/* branch */
+.branchbox { position: relative; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 72px; align-items: center; }
+.cond .q { font-size: 20px; font-weight: 700; line-height: 1.25; }
+.cond .c { margin-top: 8px; font-family: var(--mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.paths { display: flex; flex-direction: column; gap: 14px; }
+.path { position: relative; z-index: 1; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--phase); background: var(--panel); font-weight: 600; }
+.path small { display: block; font-weight: 400; color: var(--muted); font-size: 13.5px; }
+.path.not_taken { border-style: dashed; border-color: var(--rule); color: var(--muted); background: transparent; }
+.path.possible { border-style: dashed; }
+
+/* stats + narration */
+.stats { display: flex; flex-wrap: wrap; gap: 10px 30px; }
+.stat .v { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.stat .v small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 3px; }
+.stat .lb { color: var(--muted); font-size: 13.5px; }
+.stat .d { font-size: 13.5px; font-weight: 600; color: var(--phase); }
+.narration { margin: 0; font-size: clamp(16px, 1.55vw, 19px); max-width: 68ch; line-height: 1.5; }
+
+/* fitting a scene into the available height (see fitLayer) */
+.flow, .branchbox { grid-template-rows: minmax(0, 1fr); }
+.flow > .col { min-height: 0; max-height: 100%; justify-content: center; }
+.actor { display: flex; flex-direction: column; max-height: 100%; min-height: 0; }
+.actor > * { flex: none; }
+.actor > .code { flex: 0 1 auto; min-height: 0; }
+.code.cut { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); }
+.col.compact table { display: none; }
+.grid { min-height: 0; }
+.layer.dense .chip { padding: 4px 9px; font-size: 14px; }
+.layer.dense .group h3 { margin-bottom: 5px; }
+.layer.dense .grid { gap: 9px; }
+.layer.tall { grid-template-rows: auto auto auto auto; overflow-y: auto; }
+.layer.tall .flow, .layer.tall .branchbox, .layer.tall .grid { min-height: auto; grid-template-rows: auto; }
+.layer.tall .grid { overflow: visible; }
+.layer.tall .flow > .col { max-height: none; }
+.layer.tall .actor { max-height: none; }
+
+svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
+svg.wires path { fill: none; stroke: var(--phase); stroke-width: 2.5; stroke-linecap: round; }
+svg.wires path.ghost { stroke: var(--rule); stroke-dasharray: 6 7; }
+svg.wires path.maybe { stroke-dasharray: 6 7; }
+.token rect { fill: var(--phase); }
+.token text { fill: var(--token-ink); font-family: var(--sans); font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+.token circle { fill: var(--phase); }
+
+/* intro + outro */
+.layer.title { grid-template-rows: 1fr auto; align-content: center; }
+.titlebox { align-self: center; max-width: 900px; }
+.titlebox h2 { margin: 0; font-size: clamp(30px, 5vw, 58px); font-weight: 800; line-height: 1.02; letter-spacing: -0.025em; }
+.titlebox p { margin: 14px 0 0; font-size: clamp(17px, 1.8vw, 21px); color: var(--muted); max-width: 60ch; }
+.cmd { margin-top: 22px; display: inline-block; font-family: var(--mono); font-size: 14px; padding: 8px 12px; border-radius: 8px; background: var(--panel-2); border: 1.5px solid var(--rule); }
+.facts { display: flex; flex-wrap: wrap; gap: 10px 34px; }
+.fact .lb { color: var(--muted); font-size: 13.5px; }
+.fact .v { font-weight: 600; }
+.notes { margin: 0; padding-left: 18px; color: var(--muted); max-width: 72ch; }
+.errbox { margin-top: 10px; font-family: var(--mono); font-size: 13px; color: var(--error); overflow-wrap: anywhere; }
+
+/* controls */
+.controls { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 4px 0 16px; }
+.btns { display: flex; gap: 6px; }
+.btn { width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid var(--rule); background: var(--panel); cursor: pointer; display: grid; place-items: center; }
+.btn:hover { border-color: var(--ink); }
+.btn.play { width: 50px; height: 50px; background: var(--ink); border-color: var(--ink); color: var(--ground); }
+.btn svg { width: 18px; height: 18px; }
+.scrub { display: grid; gap: 2px; }
+.scrub input { width: 100%; accent-color: var(--ink); margin: 0; }
+.ticks { position: relative; height: 6px; }
+.ticks span { position: absolute; top: 0; width: 1.5px; height: 6px; background: var(--rule); }
+.meta { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meta select { background: var(--panel); border: 1.5px solid var(--rule); border-radius: 8px; padding: 6px 8px; }
+
+/* drawer */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--panel); border-left: 1.5px solid var(--rule);
+  transform: translateX(105%); transition: transform .25s ease; z-index: 20; display: flex; flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 22px calc(env(safe-area-inset-bottom, 0px) + 18px); }
+.drawer.open { transform: none; box-shadow: -20px 0 40px rgba(0,0,0,.12); }
+.drawer header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.drawer h3 { margin: 0; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+.drawer .body { overflow: auto; margin-top: 12px; display: grid; gap: 14px; align-content: start; }
+.drawer .code { font-size: 12.5px; overflow-x: auto; }
+.drawer .code .ln { overflow: visible; }
+.drawer table { border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+.drawer .tablewrap { overflow-x: auto; }
+.drawer th, .drawer td { padding: 4px 10px 4px 0; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+.drawer .cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.drawer .cols span { font-family: var(--mono); font-size: 12.5px; padding: 2px 8px; border-radius: 6px; background: var(--panel-2); }
+.drawer p { margin: 0; }
+.drawer .lb { color: var(--muted); font-size: 13.5px; margin-bottom: 4px; }
+
+/* empty state */
+.drop { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; }
+.drop.show { display: grid; }
+.drop .box { max-width: 520px; border: 2px dashed var(--rule); border-radius: 16px; padding: 32px; background: var(--panel); text-align: center; }
+.drop.over .box { border-color: var(--imports); }
+.drop h2 { margin: 0 0 8px; font-size: 24px; }
+.drop p { color: var(--muted); margin: 0 0 18px; }
+.drop label { display: inline-block; padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--ground); font-weight: 600; cursor: pointer; }
+.drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.drop .err { color: var(--error); margin-top: 14px; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 820px) {
+  .app { padding: 0 12px; }
+  .mast { flex-direction: column; align-items: flex-start; }
+  .layer { padding: 16px 16px 14px 22px; grid-template-rows: auto auto auto auto; overflow: auto; }
+  .layer.sub { margin-left: 0; }
+  .flow, .branchbox { grid-template-columns: 1fr; gap: 34px; min-height: auto; }
+  .col.empty { display: none; }
+  .controls { grid-template-columns: 1fr; }
+  .btns { justify-content: center; }
+  .meta { justify-content: space-between; }
+}
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <header class="mast">
+    <div><h1 id="title"></h1><p id="subtitle"></p></div>
+    <span class="badge" id="badge"><i></i><span></span></span>
+  </header>
+  <nav aria-label="Scenes">
+    <div class="line-wrap" id="lineWrap"><svg id="line" role="list"></svg></div>
+    <div class="line-caption"><span id="where" aria-live="polite"></span><span id="count"></span></div>
+  </nav>
+  <main class="stage" id="stage"></main>
+  <div class="controls">
+    <div class="btns">
+      <button class="btn" id="prev" aria-label="Previous scene"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z" fill="currentColor"/></svg></button>
+      <button class="btn play" id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4v16l13-8z" fill="currentColor"/></svg></button>
+      <button class="btn" id="next" aria-label="Next scene"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z" fill="currentColor"/></svg></button>
+    </div>
+    <div class="scrub"><input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Story position"><div class="ticks" id="ticks"></div></div>
+    <div class="meta"><span id="clock">0:00 / 0:00</span>
+      <label class="sr" for="speed">Speed</label>
+      <select id="speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+    </div>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Details">
+  <header><div><div class="lb" id="dKind"></div><h3 id="dTitle"></h3></div>
+    <button class="btn" id="dClose" aria-label="Close details"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></header>
+  <div class="body" id="dBody"></div>
+</aside>
+
+<div class="drop" id="drop">
+  <div class="box">
+    <h2>Open a storyboard</h2>
+    <p>Drop a <code>storyboard.json</code> here, or choose the file. Your assistant writes it from a codestory bundle.</p>
+    <label>Choose file<input type="file" id="file" accept=".json,application/json"></label>
+    <div class="err" id="dropErr"></div>
+  </div>
+</div>
+
+<script id="storyboard" type="application/json">null</script>
+<script>
+(function () {
+"use strict";
+
+const PHASE = { setup: "Start", imports: "Imports", constants: "Constants", definitions: "Definitions", input: "Input",
+  transform: "Transform", branch: "Decision", output: "Output", finish: "Finish", error: "Error" };
+const STATUS = { ran: "", skipped: "Did not run this time", possible: "Possible path", sandboxed: "Ran in safe mode",
+  failed: "Failed", blocked: "Blocked by safe mode" };
+const KIND = { function: "Function", data: "Data", file: "File", database: "Database", api: "Web API", constant: "Constant",
+  config: "Setting", library: "Library", module: "Module", message: "Message", email: "Email", process: "Program" };
+const GROUP = { stdlib: "Built into Python", third_party: "Installed packages", project: "Your project", constant: "Constants",
+  config: "From settings or environment", secret: "Secrets (hidden)", function: "Functions", class: "Classes", module: "Modules" };
+const ICON = {
+  file: '<path d="M4 1.5h5l3 3v10H4z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  database: '<ellipse cx="8" cy="4" rx="5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  api: '<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+  data: '<path d="M2 3h12v10H2zM2 6.5h12M2 10h12M6 3v10" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  function: '<path d="M5 2.5C3.5 2.5 3.5 4 3.5 5.5S2 8 2 8s1.5 1 1.5 2.5S3.5 13.5 5 13.5M11 2.5c1.5 0 1.5 1.5 1.5 3S14 8 14 8s-1.5 1-1.5 2.5.0 3-1.5 3" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  email: '<path d="M2 3.5h12v9H2zM2 4l6 5 6-5" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  constant: '<path d="M4 6h8M4 10h8" stroke="currentColor" stroke-width="1.6"/>',
+  config: '<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v2.5M8 12v2.5M1.5 8H4M12 8h2.5M3.4 3.4l1.8 1.8M10.8 10.8l1.8 1.8M3.4 12.6l1.8-1.8M10.8 5.2l1.8-1.8" stroke="currentColor" stroke-width="1.3"/>',
+  message: '<path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  process: '<path d="M2 3h12v10H2zM4.5 6.5l2 1.5-2 1.5M8 10h3" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  library: '<path d="M3 2.5h3v11H3zM7 2.5h3v11H7zM11 3l2.5.6-2 10.4L9 13.4" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  module: '<path d="M2 4l6-2.5L14 4v8l-6 2.5L2 12zM2 4l6 2.5L14 4M8 6.5v8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+};
+
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat();
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+let SB = null, flat = [], tl = null, cards = new Map(), cardSeq = 0, layers = [], starts = [];
+
+/* ---------- animation engine ----------
+   A small timeline: tweens of opacity, visibility, position, scale, stroke offset and plain-object
+   values, placed at absolute times. Every value is a pure function of the playhead, so seeking and
+   scrubbing in either direction always land on the same frame. */
+const EASE = {
+  none: (p) => p,
+  "power1.out": (p) => 1 - (1 - p) * (1 - p),
+  "power1.inOut": (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2),
+  "power2.out": (p) => 1 - Math.pow(1 - p, 3)
+};
+const NOT_PROPS = new Set(["duration", "ease", "stagger", "onUpdate", "immediateRender"]);
+const TRANSFORMS = new Set(["x", "y", "scale"]);
+const isEl = (t) => typeof Element !== "undefined" && t instanceof Element;
+const toList = (t) => (t == null ? [] : isEl(t) || typeof t.length !== "number" ? [t] : Array.from(t));
+
+function applyProp(target, prop, v, xform) {
+  if (!isEl(target)) { target[prop] = v; return; }
+  if (TRANSFORMS.has(prop)) { let s = xform.get(target); if (!s) xform.set(target, (s = { x: 0, y: 0, scale: 1 })); s[prop] = v; s.dirty = true; return; }
+  if (prop === "autoAlpha") { target.style.opacity = v; target.style.visibility = v <= 0.001 ? "hidden" : "inherit"; return; }
+  if (prop === "opacity") { target.style.opacity = v; return; }
+  target.style[prop] = v;
+}
+function flushTransforms(xform) {
+  xform.forEach((s, el) => {
+    if (!s.dirty) return;
+    s.dirty = false;
+    el.style.transform = (s.x || s.y ? "translate(" + s.x + "px," + s.y + "px)" : "") + (s.scale !== 1 ? " scale(" + s.scale + ")" : "");
+  });
+}
+
+function makeTimeline(opts) {
+  opts = opts || {};
+  const tracks = new Map(), tweens = [], xform = new Map();
+  let total = 0, time = 0, playing = false, speed = 1, raf = 0, last = 0;
+
+  function baseValue(target, prop) {
+    if (!isEl(target)) return +target[prop] || 0;
+    if (prop === "x" || prop === "y") return 0;
+    if (prop === "scale") return 1;
+    const cs = getComputedStyle(target);
+    if (prop === "autoAlpha") return cs.visibility === "hidden" ? 0 : parseFloat(cs.opacity);
+    if (prop === "opacity") return parseFloat(cs.opacity);
+    return parseFloat(target.style[prop]) || 0;
+  }
+  function track(target, prop) {
+    let m = tracks.get(target);
+    if (!m) tracks.set(target, (m = new Map()));
+    let tr = m.get(prop);
+    if (!tr) m.set(prop, (tr = { target, prop, base: baseValue(target, prop), list: [] }));
+    return tr;
+  }
+  // value of one property at time t: the latest segment that has started wins
+  function valueAt(tr, t) {
+    let cur = null;
+    for (const seg of tr.list) { if (seg.start <= t) cur = seg; else break; }
+    if (!cur) { const first = tr.list[0]; return first && first.immediate ? first.from : tr.base; }
+    const p = cur.dur > 0 ? Math.min(1, (t - cur.start) / cur.dur) : 1;
+    return cur.from + (cur.to - cur.from) * cur.ease(p);
+  }
+  function add(targets, fromVars, toVars, at, kind) {
+    const vars = kind === "from" ? fromVars : toVars;
+    const d = vars.duration != null ? vars.duration : 0.5;
+    const ease = EASE[vars.ease] || EASE["power1.out"];
+    const immediate = kind !== "to" && vars.immediateRender !== false;
+    const t0 = at == null ? total : at;
+    const props = Object.keys(vars).filter((k) => !NOT_PROPS.has(k));
+    toList(targets).forEach((target, i) => {
+      const start = t0 + i * (vars.stagger || 0);
+      const tw = { start, dur: d, onUpdate: vars.onUpdate, lastP: undefined };
+      props.forEach((prop) => {
+        const tr = track(target, prop), now = valueAt(tr, start);
+        const seg = { start, dur: d, ease, immediate,
+          from: kind === "to" ? now : +(kind === "from" ? vars[prop] : fromVars[prop]),
+          to: kind === "from" ? now : +toVars[prop] };
+        let k = tr.list.findIndex((x) => x.start > start);
+        if (k < 0) k = tr.list.length;
+        tr.list.splice(k, 0, seg);
+      });
+      tweens.push(tw);
+      total = Math.max(total, start + d);
+    });
+    return api;
+  }
+  function render() {
+    tracks.forEach((m) => m.forEach((tr) => applyProp(tr.target, tr.prop, valueAt(tr, time), xform)));
+    flushTransforms(xform);
+    for (const tw of tweens) {
+      if (!tw.onUpdate) continue;
+      const p = tw.dur > 0 ? Math.min(1, Math.max(0, (time - tw.start) / tw.dur)) : time >= tw.start ? 1 : 0;
+      if (p !== tw.lastP) { tw.lastP = p; tw.onUpdate(); }
+    }
+    if (opts.onUpdate) opts.onUpdate();
+  }
+  function frame(now) {
+    if (!playing) return;
+    time = Math.min(total, time + Math.min(0.1, (now - last) / 1000) * speed);
+    last = now;
+    render();
+    if (time >= total) { playing = false; if (opts.onComplete) opts.onComplete(); return; }
+    raf = requestAnimationFrame(frame);
+  }
+  const api = {
+    to: (t, v, at) => add(t, null, v, at, "to"),
+    from: (t, v, at) => add(t, v, null, at, "from"),
+    fromTo: (t, f, v, at) => add(t, f, v, at, "fromTo"),
+    addLabel: () => api,
+    play() { if (time >= total) time = 0; if (!playing) { playing = true; last = performance.now(); raf = requestAnimationFrame(frame); } return api; },
+    pause() { playing = false; cancelAnimationFrame(raf); return api; },
+    paused: () => !playing,
+    isActive: () => playing,
+    time: () => time,
+    duration: () => total,
+    seek(t) { time = Math.max(0, Math.min(total, t)); render(); return api; },
+    progress(p) { return p === undefined ? (total ? time / total : 0) : api.seek(p * total); },
+    timeScale(s) { if (s === undefined) return speed; speed = s; return api; },
+    kill() { return api.pause(); }
+  };
+  return api;
+}
+const anim = {
+  timeline: makeTimeline,
+  set(targets, vars) {
+    const xform = new Map();
+    toList(targets).forEach((t) => Object.keys(vars).forEach((k) => applyProp(t, k, vars[k], xform)));
+    flushTransforms(xform);
+  }
+};
+
+/* ---------- loading ---------- */
+function boot() {
+  let data = null;
+  try { data = JSON.parse($("storyboard").textContent); } catch (e) { data = null; }
+  if (data) start(data); else showDrop();
+}
+function showDrop(msg) {
+  const d = $("drop"); d.classList.add("show");
+  if (msg) $("dropErr").textContent = msg;
+  const read = (file) => file.text().then((t) => { try { const j = JSON.parse(t); d.classList.remove("show"); start(j); }
+    catch (e) { $("dropErr").textContent = "That file is not valid JSON: " + e.message; } });
+  $("file").onchange = (e) => e.target.files[0] && read(e.target.files[0]);
+  addEventListener("dragover", (e) => { e.preventDefault(); d.classList.add("over"); });
+  addEventListener("dragleave", () => d.classList.remove("over"));
+  addEventListener("drop", (e) => { e.preventDefault(); d.classList.remove("over"); const f = e.dataTransfer.files[0]; f && read(f); });
+}
+
+/* ---------- model ---------- */
+function defaultLayout(s) {
+  if (s.layout) return s.layout;
+  if (["imports", "constants", "definitions"].includes(s.phase)) return "grid";
+  if (s.phase === "branch" || s.branch) return "branch";
+  return "flow";
+}
+function defaultStatus(s) { return s.status || (SB.mode === "scan" ? "possible" : "ran"); }
+function flatten(list, parent, depth) {
+  (list || []).forEach((s) => {
+    flat.push({ s, parent, depth });
+    if (s.children && s.children.length) flatten(s.children, s, depth + 1);
+  });
+}
+function dataLabel(card) {
+  const d = card && card.data;
+  if (!d) return null;
+  if (typeof d.rows === "number") return nf.format(d.rows) + " rows";
+  return d.shape || null;
+}
+function dataRows(card) { return card && card.data && typeof card.data.rows === "number" ? card.data.rows : null; }
+
+/* ---------- rendering ---------- */
+function icon(kind) { return '<svg viewBox="0 0 16 16" aria-hidden="true">' + (ICON[kind] || ICON.data) + "</svg>"; }
+
+function cardHTML(c, opts) {
+  opts = opts || {};
+  const id = "c" + (++cardSeq);
+  cards.set(id, c);
+  const st = c.status || "";
+  let h = '<button type="button" class="card ' + (opts.actor ? "actor " : "") + esc(st) + '" data-card="' + id + '">';
+  if (opts.actor) h += '<span class="pulse"></span>';
+  h += '<div class="k">' + icon(c.kind) + esc(KIND[c.kind] || c.kind) + "</div>";
+  h += '<div class="l">' + esc(c.label) + "</div>";
+  if (c.sublabel) h += '<div class="s">' + esc(c.sublabel) + "</div>";
+  const lbl = dataLabel(c);
+  if (lbl) h += '<div class="shape">' + esc(lbl) + (c.data.cols ? ' <span class="s">× ' + nf.format(c.data.cols) + " columns</span>" : "") + "</div>";
+  if (c.data && c.data.sample && c.data.sample.rows && c.data.sample.rows.length && !opts.actor && opts.table !== false) {
+    const cols = (c.data.sample.columns || []).slice(0, 4);
+    h += "<table><thead><tr>" + cols.map((x) => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" +
+      c.data.sample.rows.slice(0, 2).map((r) => "<tr>" + cols.map((_, i) => "<td>" + esc(r[i]) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
+  }
+  if (opts.actor && c.code && c.code.snippet) h += codeHTML(c.code, 8);
+  if (STATUS[st]) h += '<div class="flag">' + esc(STATUS[st]) + "</div>";
+  return h + "</button>";
+}
+
+function codeHTML(code, maxLines) {
+  let lines = String(code.snippet).replace(/\s+$/, "").split("\n");
+  const first = code.line || 1;
+  let offset = 0;
+  if (maxLines && lines.length > maxLines) {
+    const hl = (code.highlight || [])[0];
+    if (hl) offset = Math.max(0, Math.min(lines.length - maxLines, hl - first - 2));
+    lines = lines.slice(offset, offset + maxLines);
+  }
+  const hls = new Set(code.highlight || []);
+  return '<div class="code">' + lines.map((ln, i) => {
+    const n = first + offset + i;
+    return '<span class="ln' + (hls.has(n) ? " hl" : "") + '"><b>' + n + "</b>" + esc(ln) + "</span>";
+  }).join("") + "</div>";
+}
+
+function statsHTML(stats) {
+  if (!stats || !stats.length) return "";
+  return '<div class="stats">' + stats.map((x) => {
+    const num = typeof x.value === "number";
+    return '<div class="stat"><div class="v"><span ' + (num ? 'data-count="' + x.value + '"' : "") + ">" + esc(num ? nf.format(x.value) : x.value) + "</span>" +
+      (x.unit ? "<small>" + esc(x.unit) + "</small>" : "") + "</div>" +
+      '<div class="lb">' + esc(x.label) + (typeof x.delta === "number" ? ' <span class="d">' + (x.delta > 0 ? "+" : "−") + nf.format(Math.abs(x.delta)) + "</span>" : "") + "</div></div>";
+  }).join("") + "</div>";
+}
+
+function sceneLayer(entry, idx) {
+  const s = entry.s, status = defaultStatus(s), layout = defaultLayout(s);
+  const el = document.createElement("section");
+  el.className = "layer" + (entry.depth ? " sub" : "") + (status === "skipped" ? " dim" : "");
+  el.style.setProperty("--phase", "var(--" + (PHASE[s.phase] ? s.phase : "setup") + ")");
+  el.setAttribute("aria-label", s.title);
+  let head = '<header class="scene-head"><span class="phase-chip"><i></i>' + esc(PHASE[s.phase] || s.phase) + "</span>";
+  head += "<h2>" + esc(s.title) + "</h2>";
+  if (STATUS[status]) head += '<span class="status ' + status + '">' + esc(STATUS[status]) + "</span>";
+  if (entry.parent) head += '<span class="crumb">Part of: ' + esc(entry.parent.title) + "</span>";
+  head += "</header>";
+  let body = "";
+  if (layout === "grid") body = gridHTML(s);
+  else if (layout === "branch") body = branchHTML(s);
+  else body = flowHTML(s);
+  el.innerHTML = head + body + statsHTML(s.stats) + (s.narration ? '<p class="narration">' + esc(s.narration) + "</p>" : "<span></span>");
+  el.dataset.layout = layout;
+  return el;
+}
+
+function flowHTML(s) {
+  const ins = s.inputs || [], outs = s.outputs || [];
+  const col = (cls, list, actor) => '<div class="col ' + cls + (list.length ? "" : " empty") + '">' +
+    list.map((c) => cardHTML(c, { actor })).join("") + "</div>";
+  return '<div class="flow">' + col("in", ins) + col("mid", s.actor ? [s.actor] : [], true) + col("out", outs) +
+    '<svg class="wires" aria-hidden="true"></svg></div>';
+}
+
+function gridHTML(s) {
+  const groups = {};
+  (s.items || []).forEach((it) => { const k = it.kind || "module"; (groups[k] = groups[k] || []).push(it); });
+  const order = ["project", "third_party", "stdlib", "constant", "config", "secret", "function", "class", "module"];
+  const keys = Object.keys(groups).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  return '<div class="grid">' + keys.map((k) => '<div class="group"><h3>' + esc(GROUP[k] || k) + '</h3><div class="chips">' +
+    groups[k].map((it) => '<span class="chip ' + esc(k) + " " + esc(it.status || "") + '" title="' + esc(it.note || "") + '">' + esc(it.label) +
+      (it.value ? '<span class="cv">' + esc(it.value) + "</span>" : "") + (it.note ? "<small>" + esc(it.note) + "</small>" : "") + "</span>").join("") +
+    "</div></div>").join("") + "</div>";
+}
+
+function branchHTML(s) {
+  const b = s.branch || { condition: "", paths: [] };
+  const cond = '<div class="card actor cond" data-card="' + regCard({ kind: "function", label: b.question || b.condition, code: s.actor && s.actor.code, detail: b.condition }) + '">' +
+    '<span class="pulse"></span><div class="k">' + icon("function") + "Decision</div>" +
+    '<div class="q">' + esc(b.question || b.condition) + "</div>" + (b.question ? '<div class="c">' + esc(b.condition) + "</div>" : "") + "</div>";
+  const paths = '<div class="paths">' + b.paths.map((p) => '<div class="path ' + esc(p.status) + '">' + esc(p.label) +
+    "<small>" + (p.status === "taken" ? "Taken in this run" : p.status === "not_taken" ? "Not taken" : "Possible") + "</small></div>").join("") + "</div>";
+  return '<div class="branchbox">' + cond + paths + '<svg class="wires" aria-hidden="true"></svg></div>';
+}
+function regCard(c) { const id = "c" + (++cardSeq); cards.set(id, c); return id; }
+
+function titleLayer() {
+  const el = document.createElement("section");
+  el.className = "layer title";
+  el.style.setProperty("--phase", "var(--finish)");
+  const r = SB.run || {};
+  let facts = "";
+  if (SB.mode === "run") {
+    facts += fact("Outcome", r.status === "error" ? "Stopped with an error" : r.status === "exit" ? "Exited early" : "Finished");
+    if (typeof r.duration_ms === "number") facts += fact("Took", r.duration_ms < 1000 ? Math.round(r.duration_ms) + " ms" : (r.duration_ms / 1000).toFixed(1) + " s");
+    if (r.started_at) facts += fact("Started", new Date(r.started_at).toLocaleString());
+    facts += fact("Side effects", r.safe_mode === false ? "Real (live mode)" : "Held in a sandbox (safe mode)");
+  } else {
+    facts += fact("View", "Every path the code can take");
+    facts += fact("Executed", "No, read from the source");
+  }
+  facts += fact("Scenes", String(flat.length));
+  el.innerHTML = '<div class="titlebox"><h2>' + esc(SB.title) + "</h2>" + (SB.subtitle ? "<p>" + esc(SB.subtitle) + "</p>" : "") +
+    (SB.entry ? '<div class="cmd">python ' + esc(SB.entry) + "</div>" : "") + "</div>" + '<div class="facts">' + facts + "</div>";
+  return el;
+}
+function fact(lb, v) { return '<div class="fact"><div class="lb">' + esc(lb) + '</div><div class="v">' + esc(v) + "</div></div>"; }
+
+function outroLayer() {
+  const sm = SB.summary || {};
+  const r = SB.run || {};
+  const el = document.createElement("section");
+  el.className = "layer title";
+  el.style.setProperty("--phase", r.status === "error" ? "var(--error)" : "var(--finish)");
+  const head = sm.headline || (SB.mode === "scan" ? "That is every path through the code." : r.status === "error" ? "The run stopped early." : "The run is complete.");
+  el.innerHTML = '<div class="titlebox"><h2>' + esc(head) + "</h2>" + (r.error ? '<div class="errbox">' + esc(r.error) + "</div>" : "") + "</div>" +
+    "<div>" + statsHTML(sm.stats) + (sm.notes && sm.notes.length ? '<ul class="notes">' + sm.notes.map((n) => "<li>" + esc(n) + "</li>").join("") + "</ul>" : "") + "</div>";
+  return el;
+}
+
+/* ---------- fitting ----------
+   Each scene must fit between its title and its narration. Measured after layout, in steps:
+   shrink the code (fading the cut), drop sample tables, tighten grid chips, and as a last
+   resort let the scene scroll. Never let content overlap the narration. */
+const MOBILE = "(max-width: 820px)";
+function overflows(el) { return el.scrollHeight > el.clientHeight + 1; }
+function fitLayer(el) {
+  el.classList.remove("tall", "dense");
+  el.querySelectorAll(".compact").forEach((c) => c.classList.remove("compact"));
+  el.querySelectorAll(".code.cut").forEach((c) => c.classList.remove("cut"));
+  if (matchMedia(MOBILE).matches) return;
+  el.querySelectorAll(".flow > .col").forEach((col) => { if (overflows(col)) col.classList.add("compact"); });
+  let tooSmall = false;
+  el.querySelectorAll(".actor > .code").forEach((c) => {
+    if (overflows(c)) c.classList.add("cut");
+    const line = c.querySelector(".ln");
+    if (line && c.clientHeight < line.offsetHeight * 4 + 12) tooSmall = true;   // keep at least 4 lines
+  });
+  const grid = el.querySelector(".grid");
+  if (grid && overflows(grid)) { el.classList.add("dense"); if (overflows(grid)) tooSmall = true; }
+  el.querySelectorAll(".flow > .col").forEach((col) => { if (overflows(col)) tooSmall = true; });
+  if (tooSmall || overflows(el)) {
+    el.classList.remove("dense");
+    el.querySelectorAll(".compact").forEach((c) => c.classList.remove("compact"));
+    el.querySelectorAll(".code.cut").forEach((c) => c.classList.remove("cut"));
+    el.classList.add("tall");
+  }
+}
+
+/* ---------- wires ---------- */
+function rel(el, box) { const r = el.getBoundingClientRect(); return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height }; }
+function wirePath(a, b) {
+  if (b.y >= a.y + a.h - 2) { // vertical stack (small screens)
+    const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = b.x + b.w / 2, y2 = b.y, m = (y2 - y1) / 2;
+    return `M${x1},${y1} C${x1},${y1 + m} ${x2},${y2 - m} ${x2},${y2}`;
+  }
+  const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2, m = Math.max(20, (x2 - x1) / 2);
+  return `M${x1},${y1} C${x1 + m},${y1} ${x2 - m},${y2} ${x2},${y2}`;
+}
+function addWire(svg, d, cls) {
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", d); if (cls) p.setAttribute("class", cls);
+  svg.appendChild(p); return p;
+}
+function addToken(svg, label) {
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.setAttribute("class", "token");
+  if (label) {
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("text-anchor", "middle"); t.setAttribute("dominant-baseline", "central"); t.setAttribute("y", "1");
+    t.textContent = label;
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    r.setAttribute("rx", "12"); r.setAttribute("height", "24"); r.setAttribute("y", "-12");
+    g.appendChild(r); g.appendChild(t);
+    g._text = t; g._rect = r;
+  } else {
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    c.setAttribute("r", "7"); g.appendChild(c);
+  }
+  g.style.opacity = 0;
+  svg.appendChild(g);
+  return g;
+}
+function sizeToken(g, text) {
+  if (!g._text) return;
+  g._text.textContent = text;
+  const w = Math.max(44, text.length * 7.6 + 22);
+  g._rect.setAttribute("width", w); g._rect.setAttribute("x", -w / 2);
+}
+
+/* ---------- timeline ---------- */
+function travel(t, at, path, token, dur, fromText, toText, fromN, toN) {
+  const len = path.getTotalLength();
+  const st = { p: 0, n: fromN };
+  const place = () => {
+    const pt = path.getPointAtLength(st.p * len);
+    token.setAttribute("transform", "translate(" + pt.x + "," + pt.y + ")");
+    if (token._text) {
+      if (fromN != null && toN != null && fromN !== toN) sizeToken(token, nf.format(Math.round(st.n)) + " rows");
+      else sizeToken(token, st.p < 0.5 ? fromText : (toText || fromText));
+    }
+  };
+  place();
+  t.to(token, { opacity: 1, duration: 0.15 }, at);
+  t.to(st, { p: 1, n: toN != null ? toN : fromN, duration: dur, ease: "power1.inOut", onUpdate: place }, at);
+  t.to(token, { opacity: 0, duration: 0.2 }, at + dur);
+}
+function draw(t, at, path, dur) {
+  const len = path.getTotalLength();
+  path.style.strokeDasharray = len; path.style.strokeDashoffset = len;
+  t.to(path, { strokeDashoffset: 0, duration: dur, ease: "power2.out" }, at);
+}
+function counters(t, el, at) {
+  el.querySelectorAll("[data-count]").forEach((n) => {
+    const target = parseFloat(n.dataset.count); const o = { v: 0 };
+    const dec = Math.abs(target) < 10 && target % 1 ? 2 : 0;
+    n.textContent = "0";
+    t.to(o, { v: target, duration: reduced ? 0.01 : 0.9, ease: "power2.out", onUpdate: () => { n.textContent = nf.format(+o.v.toFixed(dec)); } }, at);
+  });
+}
+
+function animateFlow(t, el, s, at) {
+  const flowEl = el.querySelector(".flow");
+  const svg = el.querySelector("svg.wires");
+  const box = flowEl.getBoundingClientRect();
+  const ins = [...el.querySelectorAll(".col.in .card")], outs = [...el.querySelectorAll(".col.out .card")];
+  const actor = el.querySelector(".col.mid .card");
+  const st = defaultStatus(s);
+  const ghost = st === "skipped" ? "ghost" : st === "possible" ? "maybe" : "";
+  const D = reduced ? 0.01 : 1;
+  let cur = at;
+  ins.forEach((c, i) => t.from(c, { opacity: 0, x: reduced ? 0 : -18, duration: 0.45 * D + 0.01, ease: "power2.out" }, cur + i * 0.12));
+  cur += ins.length ? 0.35 : 0;
+  if (actor) t.from(actor, { opacity: 0, scale: reduced ? 1 : 0.96, duration: 0.45 * D + 0.01, ease: "power2.out" }, cur);
+  cur += 0.45;
+  const inCards = s.inputs || [], outCards = s.outputs || [];
+  const firstIn = inCards.find(dataRows) || inCards.find(dataLabel) || null;
+  const outWithData = outCards.find(dataRows) || outCards.find(dataLabel) || null;
+  const hub = actor;
+  // inputs -> actor (or straight to outputs if no actor)
+  const targetsIn = hub ? [hub] : outs;
+  const travelIn = [];
+  ins.forEach((c, i) => targetsIn.forEach((tg) => {
+    const p = addWire(svg, wirePath(rel(c, box), rel(tg, box)), ghost);
+    if (ghost) t.from(p, { opacity: 0, duration: 0.4 }, cur); else draw(t, cur, p, 0.55 * D + 0.01);
+    travelIn.push({ p, card: inCards[i] });
+  }));
+  if (travelIn.length) cur += 0.5;
+  if (!ghost && !reduced) {
+    travelIn.forEach(({ p, card }, i) => {
+      const lbl = dataLabel(card);
+      if (hub) travel(t, cur + i * 0.15, p, addToken(svg, lbl), 0.9, lbl, lbl, null, null);
+      else { const tl2 = dataLabel(outCards[0]); travel(t, cur + i * 0.15, p, addToken(svg, lbl), 1.1, lbl, tl2, dataRows(card), dataRows(outCards[0])); }
+    });
+    if (travelIn.length) cur += 0.9 + (travelIn.length - 1) * 0.15;
+  }
+  if (hub) {
+    const pulse = hub.querySelector(".pulse");
+    if (pulse && !ghost) { t.fromTo(pulse, { opacity: 0.9, scale: 1 }, { opacity: 0, scale: reduced ? 1 : 1.04, duration: 0.7, immediateRender: false }, cur); }
+    cur += 0.35;
+    const travelOut = [];
+    outs.forEach((o, i) => {
+      const p = addWire(svg, wirePath(rel(hub, box), rel(o, box)), ghost || (outCards[i] && /sandboxed|blocked/.test(outCards[i].status || "") ? "maybe" : ""));
+      if (ghost) t.from(p, { opacity: 0, duration: 0.4 }, cur); else draw(t, cur, p, 0.55 * D + 0.01);
+      travelOut.push({ p, card: outCards[i], el: o });
+    });
+    if (travelOut.length) cur += 0.45;
+    travelOut.forEach(({ p, card, el: oEl }, i) => {
+      const at2 = cur + i * 0.2;
+      if (!ghost && !reduced) {
+        const fromLbl = dataLabel(firstIn) || dataLabel(card);
+        const toLbl = dataLabel(card) || fromLbl;
+        travel(t, at2, p, addToken(svg, fromLbl), 1.1, fromLbl, toLbl, dataRows(firstIn), dataRows(card) != null ? dataRows(card) : dataRows(firstIn));
+        t.from(oEl, { opacity: 0, x: 16, duration: 0.4, ease: "power2.out" }, at2 + 0.8);
+      } else t.from(oEl, { opacity: 0, duration: 0.4 }, at2);
+    });
+    if (travelOut.length) cur += (ghost || reduced ? 0.4 : 1.2) + (travelOut.length - 1) * 0.2;
+  } else if (outs.length) {
+    outs.forEach((o, i) => t.from(o, { opacity: 0, x: reduced ? 0 : 16, duration: 0.4 }, cur + i * 0.15));
+    cur += 0.5;
+  }
+  void outWithData;
+  return cur;
+}
+
+function animateGrid(t, el, s, at) {
+  const chips = el.querySelectorAll(".chip"), heads = el.querySelectorAll(".group h3");
+  t.from(heads, { opacity: 0, duration: 0.3, stagger: 0.15 }, at);
+  t.from(chips, { opacity: 0, y: reduced ? 0 : 8, duration: 0.35, stagger: Math.min(0.09, 2.4 / Math.max(1, chips.length)), ease: "power2.out" }, at + 0.1);
+  return at + 0.5 + Math.min(2.4, chips.length * 0.09);
+}
+
+function animateBranch(t, el, s, at) {
+  const boxEl = el.querySelector(".branchbox"), svg = el.querySelector("svg.wires");
+  const box = boxEl.getBoundingClientRect();
+  const cond = el.querySelector(".cond"), paths = [...el.querySelectorAll(".path")];
+  const info = (s.branch && s.branch.paths) || [];
+  t.from(cond, { opacity: 0, scale: reduced ? 1 : 0.97, duration: 0.45 }, at);
+  let cur = at + 0.5;
+  paths.forEach((pEl, i) => {
+    const stt = (info[i] || {}).status;
+    const w = addWire(svg, wirePath(rel(cond, box), rel(pEl, box)), stt === "not_taken" ? "ghost" : stt === "possible" ? "maybe" : "");
+    t.from(pEl, { opacity: 0, x: reduced ? 0 : 14, duration: 0.4 }, cur + i * 0.15);
+    if (stt === "taken") draw(t, cur + i * 0.15, w, 0.6); else t.from(w, { opacity: 0, duration: 0.4 }, cur + i * 0.15);
+  });
+  cur += 0.5 + paths.length * 0.15;
+  const takenIdx = info.findIndex((p) => p.status === "taken");
+  if (takenIdx >= 0 && !reduced) {
+    const w = svg.querySelectorAll("path")[takenIdx];
+    const pulse = cond.querySelector(".pulse");
+    t.fromTo(pulse, { opacity: 0.9 }, { opacity: 0, duration: 0.6, immediateRender: false }, cur);
+    travel(t, cur + 0.2, w, addToken(svg, null), 0.9, null, null, null, null);
+    cur += 1.2;
+  }
+  return cur;
+}
+
+function readingTime(s) {
+  const words = ((s.narration || "") + " " + (s.title || "")).split(/\s+/).filter(Boolean).length;
+  return 1.6 + words / 3.2;
+}
+
+function buildTimeline() {
+  const stage = $("stage");
+  stage.innerHTML = ""; cards.clear(); cardSeq = 0; layers = []; starts = [];
+  layers.push(titleLayer());
+  flat.forEach((e, i) => layers.push(sceneLayer(e, i)));
+  layers.push(outroLayer());
+  layers.forEach((l) => stage.appendChild(l));
+  anim.set(layers, { autoAlpha: 0 });
+  layers.forEach(fitLayer);
+
+  const t = anim.timeline({ onUpdate: syncUI, onComplete: () => setPlaying(false) });
+  let at = 0;
+  layers.forEach((el, i) => {
+    starts.push(at);
+    t.addLabel("s" + i, at);
+    if (i > 0) t.to(layers[i - 1], { autoAlpha: 0, duration: 0.3 }, at);
+    t.to(el, { autoAlpha: 1, duration: 0.35 }, at);
+    let end = at + 0.35;
+    const head = el.querySelector(".scene-head, .titlebox");
+    if (head) t.from(head, { opacity: 0, y: reduced ? 0 : 10, duration: 0.45, ease: "power2.out" }, at + 0.05);
+    const narr = el.querySelector(".narration");
+    if (narr) t.from(narr, { opacity: 0, duration: 0.5 }, at + 0.25);
+    if (i === 0) {
+      t.from(el.querySelectorAll(".fact"), { opacity: 0, y: reduced ? 0 : 8, stagger: 0.12, duration: 0.4 }, at + 0.5);
+      end = at + 3.4;
+    } else if (i === layers.length - 1) {
+      counters(t, el, at + 0.5);
+      t.from(el.querySelectorAll(".stat, .notes li"), { opacity: 0, y: reduced ? 0 : 8, stagger: 0.1, duration: 0.4 }, at + 0.4);
+      end = at + 3.5;
+    } else {
+      const entry = flat[i - 1], s = entry.s, lay = el.dataset.layout;
+      let animEnd = lay === "grid" ? animateGrid(t, el, s, at + 0.35) : lay === "branch" ? animateBranch(t, el, s, at + 0.35) : animateFlow(t, el, s, at + 0.35);
+      const statsEl = el.querySelector(".stats");
+      if (statsEl) { t.from(statsEl, { opacity: 0, duration: 0.4 }, animEnd - 0.2); counters(t, statsEl, animEnd - 0.2); animEnd += 0.7; }
+      end = Math.max(animEnd + 1.0, at + readingTime(s));
+    }
+    t.to({}, { duration: 0.001 }, end);
+    at = end;
+  });
+  starts.push(at);
+  return t;
+}
+
+/* ---------- transit line ---------- */
+function buildLine() {
+  const svg = $("line"), wrap = $("lineWrap");
+  const n = flat.length + 2, pad = 14;
+  const width = Math.max(wrap.clientWidth, n * 34);
+  const gap = (width - pad * 2) / (n - 1);
+  svg.setAttribute("width", width); svg.setAttribute("viewBox", "0 0 " + width + " 44");
+  const y = 22;
+  let h = "";
+  const phaseOf = (i) => i === 0 ? "finish" : i === n - 1 ? "finish" : flat[i - 1].s.phase;
+  for (let i = 0; i < n - 1; i++) {
+    const ph = phaseOf(i + 1);
+    const dim = i + 1 < n - 1 && defaultStatus(flat[i].s) === "skipped";
+    h += '<line x1="' + (pad + i * gap) + '" y1="' + y + '" x2="' + (pad + (i + 1) * gap) + '" y2="' + y + '" stroke="var(--' + (dim ? "rule" : ph) + ')" stroke-width="5" stroke-linecap="round"' + (dim ? ' stroke-dasharray="2 6"' : "") + "/>";
+  }
+  h += '<circle id="here" r="11" cx="' + pad + '" cy="' + y + '" fill="none" stroke="var(--ink)" stroke-width="2.5"/>';
+  for (let i = 0; i < n; i++) {
+    const x = pad + i * gap, ph = phaseOf(i);
+    const name = i === 0 ? "Start" : i === n - 1 ? "End" : flat[i - 1].s.title;
+    const sub = i > 0 && i < n - 1 && flat[i - 1].depth > 0;
+    h += '<g class="station" role="listitem" tabindex="0" data-i="' + i + '" aria-label="' + esc(name) + '"><title>' + esc(name) + "</title>" +
+      '<circle cx="' + x + '" cy="' + y + '" r="14" fill="transparent"/>' +
+      '<circle class="st-base" cx="' + x + '" cy="' + y + '" r="' + (sub ? 3.5 : 5.5) + '" fill="var(--panel)" stroke="var(--' + ph + ')" stroke-width="2.5"/></g>';
+  }
+  svg.innerHTML = h;
+  svg._x = (i) => pad + i * gap;
+  svg.querySelectorAll(".station").forEach((g) => {
+    const go = () => seekScene(+g.dataset.i);
+    g.addEventListener("click", go);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+  const ticks = $("ticks"); ticks.innerHTML = "";
+  const total = starts[starts.length - 1];
+  for (let i = 1; i < starts.length - 1; i++) { const sp = document.createElement("span"); sp.style.left = (starts[i] / total * 100) + "%"; ticks.appendChild(sp); }
+}
+
+/* ---------- UI sync ---------- */
+let lastIdx = -1;
+function currentIndex() { const time = tl.time(); let i = 0; while (i < starts.length - 2 && time >= starts[i + 1]) i++; return i; }
+function syncUI() {
+  const total = tl.duration();
+  $("scrub").value = Math.round(tl.progress() * 1000);
+  $("clock").textContent = fmtTime(tl.time()) + " / " + fmtTime(total);
+  const i = currentIndex();
+  const svg = $("line");
+  const span = starts[i + 1] - starts[i];
+  const local = Math.min(1, Math.max(0, (tl.time() - starts[i]) / 0.5));
+  const x = svg._x(i - 1 < 0 ? 0 : i - 1) + (svg._x(i) - svg._x(Math.max(0, i - 1))) * (i === 0 ? 0 : local);
+  $("here").setAttribute("cx", x);
+  if (i !== lastIdx) {
+    lastIdx = i;
+    const n = flat.length;
+    const label = i === 0 ? "Start" : i === n + 1 ? "End" : flat[i - 1].s.title;
+    const phase = i === 0 || i === n + 1 ? "" : (PHASE[flat[i - 1].s.phase] || "") + ": ";
+    $("where").innerHTML = esc(phase) + "<strong>" + esc(label) + "</strong>";
+    $("count").textContent = i === 0 ? n + " scenes" : i === n + 1 ? "Done" : "Scene " + i + " of " + n;
+    svg.querySelectorAll(".st-base").forEach((c, k) => c.setAttribute("fill", k <= i ? "var(--" + (k === 0 || k === n + 1 ? "finish" : flat[k - 1].s.phase) + ")" : "var(--panel)"));
+    const wrap = $("lineWrap"); const sx = svg._x(i);
+    if (sx < wrap.scrollLeft + 40 || sx > wrap.scrollLeft + wrap.clientWidth - 40) wrap.scrollTo({ left: sx - wrap.clientWidth / 2, behavior: reduced ? "auto" : "smooth" });
+  }
+  void span;
+}
+function setPlaying(on) {
+  $("playIcon").setAttribute("d", on ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4v16l13-8z");
+  $("play").setAttribute("aria-label", on ? "Pause" : "Play");
+}
+function play() { if (tl.progress() >= 1) tl.seek(0, false); tl.play(); setPlaying(true); }
+function pause() { tl.pause(); setPlaying(false); }
+function toggle() { tl.paused() || !tl.isActive() && tl.progress() >= 1 ? play() : pause(); }
+function seekScene(i) {
+  i = Math.max(0, Math.min(starts.length - 2, i));
+  // playing: start the scene from its beginning; paused: show the scene fully built
+  const playing = !tl.paused() && tl.progress() < 1;
+  lastIdx = -1;
+  tl.seek(playing ? starts[i] + 0.001 : Math.max(starts[i] + 0.001, starts[i + 1] - 0.05), false);
+  syncUI();
+}
+
+/* ---------- drawer ---------- */
+function openDrawer(c) {
+  pause();
+  $("dKind").textContent = (KIND[c.kind] || c.kind || "") + (STATUS[c.status] ? ", " + STATUS[c.status].toLowerCase() : "");
+  $("dTitle").textContent = c.label;
+  let h = "";
+  if (c.sublabel) h += "<p>" + esc(c.sublabel) + "</p>";
+  if (c.detail) h += "<p>" + esc(c.detail) + "</p>";
+  const d = c.data;
+  if (d) {
+    const lbl = dataLabel(c);
+    if (lbl) h += '<div><div class="lb">Size</div><p>' + esc(lbl) + (d.cols ? ", " + nf.format(d.cols) + " columns" : "") + "</p></div>";
+    if (d.columns && d.columns.length) h += '<div><div class="lb">Columns</div><div class="cols">' + d.columns.map((x) => "<span>" + esc(x) + "</span>").join("") + "</div></div>";
+    if (d.sample && d.sample.rows && d.sample.rows.length) h += '<div><div class="lb">Sample</div><div class="tablewrap"><table><thead><tr>' + (d.sample.columns || []).map((x) => "<th>" + esc(x) + "</th>").join("") +
+      "</tr></thead><tbody>" + d.sample.rows.map((r) => "<tr>" + r.map((x) => "<td>" + esc(x) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div></div>";
+    if (d.note) h += "<p>" + esc(d.note) + "</p>";
+  }
+  if (c.code && c.code.snippet) h += '<div><div class="lb">' + esc((c.code.file || "") + (c.code.line ? ", line " + c.code.line : "")) + "</div>" + codeHTML(c.code, 0) + "</div>";
+  $("dBody").innerHTML = h || "<p>No further detail for this item.</p>";
+  const dr = $("drawer"); dr.classList.add("open"); dr.setAttribute("aria-hidden", "false");
+  const cur = layers[currentIndex()];
+  if (cur) dr.style.setProperty("--phase", cur.style.getPropertyValue("--phase"));
+  $("dClose").focus();
+}
+function closeDrawer() { const dr = $("drawer"); dr.classList.remove("open"); dr.setAttribute("aria-hidden", "true"); }
+
+/* ---------- start ---------- */
+function start(data) {
+  SB = data; flat = [];
+  flatten(SB.scenes, null, 0);
+  $("app").hidden = false;
+  $("title").textContent = SB.title || "Code story";
+  $("subtitle").textContent = SB.subtitle || "";
+  document.title = SB.title || "Code story";
+  const b = $("badge"), r = SB.run || {};
+  b.className = "badge" + (SB.mode === "scan" ? " scan" : r.status === "error" ? " err" : "");
+  b.querySelector("span").textContent = SB.mode === "scan" ? "Code walkthrough, not executed" : r.status === "error" ? "Run stopped with an error" : "Recorded run" + (r.safe_mode === false ? ", live" : ", safe mode");
+
+  const rebuild = () => {
+    const p = tl ? tl.progress() : 0, wasPlaying = tl && !tl.paused();
+    if (tl) tl.kill();
+    tl = buildTimeline();
+    buildLine();
+    lastIdx = -1;
+    tl.timeScale(parseFloat($("speed").value));
+    tl.progress(p, false);
+    syncUI();
+    if (wasPlaying) tl.play();
+  };
+  const go = () => {
+    rebuild();
+    if (!reduced) setTimeout(() => { if (tl.progress() === 0) play(); }, 700);
+  };
+  (document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve()).then(go);
+
+  $("play").onclick = toggle;
+  $("prev").onclick = () => seekScene(currentIndex() - 1);
+  $("next").onclick = () => seekScene(currentIndex() + 1);
+  $("scrub").oninput = (e) => { pause(); tl.progress(e.target.value / 1000, false); };
+  $("speed").onchange = (e) => tl.timeScale(parseFloat(e.target.value));
+  $("stage").addEventListener("click", (e) => { const el = e.target.closest("[data-card]"); if (el) openDrawer(cards.get(el.dataset.card)); });
+  $("dClose").onclick = closeDrawer;
+  addEventListener("keydown", (e) => {
+    if (e.target.matches("input, select, textarea")) return;
+    if (e.key === "Escape") return closeDrawer();
+    if (e.key === " " && !e.target.matches("button, [tabindex]")) { e.preventDefault(); toggle(); }
+    if (e.key === "ArrowRight") { e.preventDefault(); seekScene(currentIndex() + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); seekScene(currentIndex() - 1); }
+    if (e.key === "Home") seekScene(0);
+    if (e.key === "End") { pause(); tl.progress(1, false); }
+  });
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(rebuild, 200); });
+}
+
+window.codestory = { get timeline() { return tl; }, get sceneStarts() { return starts.slice(); } };
+boot();
+})();
+</script>
+</body>
+</html>

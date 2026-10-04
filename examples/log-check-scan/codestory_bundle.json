@@ -1,0 +1,440 @@
+{
+ "schema": "codestory.bundle/1",
+ "tool_version": "0.1.0",
+ "mode": "scan",
+ "created": "2026-10-03T21:16:33+00:00",
+ "entry": "analyze_logs.py",
+ "entry_module": "analyze_logs",
+ "root": "test2",
+ "python": "3.12.3",
+ "libraries": [
+  {
+   "name": "collections",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "email",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "json",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "re",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "smtplib",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "sys",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  }
+ ],
+ "modules": {
+  "analyze_logs": {
+   "name": "analyze_logs",
+   "path": "analyze_logs.py",
+   "lines": 69,
+   "imports": [
+    {
+     "module": "json",
+     "names": [],
+     "alias": null,
+     "line": 2,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "re",
+     "names": [],
+     "alias": null,
+     "line": 3,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "smtplib",
+     "names": [],
+     "alias": null,
+     "line": 4,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "sys",
+     "names": [],
+     "alias": null,
+     "line": 5,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "collections",
+     "names": [
+      "Counter"
+     ],
+     "alias": null,
+     "line": 6,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "email.message",
+     "names": [
+      "EmailMessage"
+     ],
+     "alias": null,
+     "line": 7,
+     "kind": "stdlib",
+     "scope": "module"
+    }
+   ],
+   "constants": [
+    {
+     "name": "LOG_PATH",
+     "line": 9,
+     "value": "'logs/access.log'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "REPORT_PATH",
+     "line": 10,
+     "value": "'reports/errors.json'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "ERROR_RATE_ALERT",
+     "line": 11,
+     "value": "0.05",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "SMTP_HOST",
+     "line": 12,
+     "value": "'mail.internal'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "ONCALL",
+     "line": 13,
+     "value": "'oncall@example.com'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "LINE",
+     "line": 15,
+     "value": "re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')",
+     "how": "expression",
+     "upper": true
+    }
+   ],
+   "functions": {
+    "parse": {
+     "id": "analyze_logs:parse",
+     "name": "parse",
+     "qualname": "parse",
+     "line": 18,
+     "end": 25,
+     "args": [
+      "lines"
+     ],
+     "doc": "Turn raw log lines into dicts; skip lines that don't match.",
+     "calls": [
+      "LINE.search",
+      "m.groupdict",
+      "int"
+     ],
+     "branches": [
+      {
+       "line": 22,
+       "condition": "m",
+       "has_else": false,
+       "body_lines": [
+        23,
+        25
+       ]
+      }
+     ],
+     "loops": [
+      {
+       "line": 20,
+       "code": "for line in lines:"
+      }
+     ],
+     "calls_project": [],
+     "reach_depth": 1,
+     "source": "def parse(lines):\n    \"\"\"Turn raw log lines into dicts; skip lines that don't match.\"\"\"\n    for line in lines:\n        m = LINE.search(line)\n        if m:\n            d = m.groupdict()\n            d[\"status\"] = int(d[\"status\"])\n            yield d"
+    },
+    "endpoint": {
+     "id": "analyze_logs:endpoint",
+     "name": "endpoint",
+     "qualname": "endpoint",
+     "line": 28,
+     "end": 30,
+     "args": [
+      "path"
+     ],
+     "doc": "Collapse ids so /orders/123 and /orders/456 count together.",
+     "calls": [
+      "re.sub",
+      "path.split"
+     ],
+     "calls_project": [],
+     "reach_depth": 2,
+     "source": "def endpoint(path):\n    \"\"\"Collapse ids so /orders/123 and /orders/456 count together.\"\"\"\n    return re.sub(r\"/\\d+\", \"/:id\", path.split(\"?\")[0])"
+    },
+    "summarize": {
+     "id": "analyze_logs:summarize",
+     "name": "summarize",
+     "qualname": "summarize",
+     "line": 33,
+     "end": 41,
+     "args": [
+      "requests"
+     ],
+     "calls": [
+      "Counter",
+      "endpoint",
+      "round",
+      "total.most_common"
+     ],
+     "branches": [
+      {
+       "line": 38,
+       "condition": "r[\"status\"] >= 500",
+       "has_else": false,
+       "body_lines": [
+        39,
+        39
+       ]
+      }
+     ],
+     "loops": [
+      {
+       "line": 35,
+       "code": "for r in requests:"
+      }
+     ],
+     "calls_project": [
+      "analyze_logs:endpoint"
+     ],
+     "reach_depth": 1,
+     "source": "def summarize(requests):\n    total, errors = Counter(), Counter()\n    for r in requests:\n        ep = endpoint(r[\"path\"])\n        total[ep] += 1\n        if r[\"status\"] >= 500:\n            errors[ep] += 1\n    return [{\"endpoint\": ep, \"requests\": n, \"errors\": errors[ep], \"error_rate\": round(errors[ep] / n, 4)}\n            for ep, n in total.most_common()]"
+    },
+    "send_alert": {
+     "id": "analyze_logs:send_alert",
+     "name": "send_alert",
+     "qualname": "send_alert",
+     "line": 44,
+     "end": 52,
+     "args": [
+      "rows",
+      "rate"
+     ],
+     "calls": [
+      "EmailMessage",
+      "sorted",
+      "msg.set_content",
+      "smtplib.SMTP",
+      "s.send_message"
+     ],
+     "io": [
+      {
+       "line": 52,
+       "call": "s.send_message",
+       "direction": "write",
+       "kind": "email",
+       "target": "msg"
+      }
+     ],
+     "calls_project": [],
+     "reach_depth": 1,
+     "source": "def send_alert(rows, rate):\n    msg = EmailMessage()\n    msg[\"Subject\"] = f\"Error rate {rate:.1%} in last night's traffic\"\n    msg[\"To\"] = ONCALL\n    msg[\"From\"] = \"logbot@example.com\"\n    worst = sorted(rows, key=lambda r: r[\"errors\"], reverse=True)[:5]\n    msg.set_content(\"\\n\".join(f'{r[\"endpoint\"]}: {r[\"errors\"]} errors' for r in worst))\n    with smtplib.SMTP(SMTP_HOST) as s:\n        s.send_message(msg)"
+    },
+    "main": {
+     "id": "analyze_logs:main",
+     "name": "main",
+     "qualname": "main",
+     "line": 55,
+     "end": 65,
+     "args": [
+      "path"
+     ],
+     "calls": [
+      "open",
+      "summarize",
+      "parse",
+      "json.dump",
+      "sum",
+      "send_alert"
+     ],
+     "io": [
+      {
+       "line": 56,
+       "call": "open",
+       "direction": "read",
+       "kind": "file",
+       "target": "path"
+      },
+      {
+       "line": 58,
+       "call": "open",
+       "direction": "write",
+       "kind": "file",
+       "target": "REPORT_PATH"
+      },
+      {
+       "line": 59,
+       "call": "json.dump",
+       "direction": "write",
+       "kind": "file",
+       "target": "out"
+      }
+     ],
+     "branches": [
+      {
+       "line": 63,
+       "condition": "rate > ERROR_RATE_ALERT",
+       "has_else": false,
+       "body_lines": [
+        64,
+        64
+       ]
+      }
+     ],
+     "calls_project": [
+      "analyze_logs:parse",
+      "analyze_logs:send_alert",
+      "analyze_logs:summarize"
+     ],
+     "reach_depth": 0,
+     "source": "def main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate"
+    }
+   },
+   "classes": {},
+   "main_flow": [
+    {
+     "line": 1,
+     "kind": "expr",
+     "code": "\"\"\"Nightly check of web server logs: error rates per endpoint, with an email if things look bad.\"\"\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 9,
+     "kind": "assign",
+     "code": "LOG_PATH = \"logs/access.log\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 10,
+     "kind": "assign",
+     "code": "REPORT_PATH = \"reports/errors.json\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 11,
+     "kind": "assign",
+     "code": "ERROR_RATE_ALERT = 0.05",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 12,
+     "kind": "assign",
+     "code": "SMTP_HOST = \"mail.internal\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 13,
+     "kind": "assign",
+     "code": "ONCALL = \"oncall@example.com\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 15,
+     "kind": "assign",
+     "code": "LINE = re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')",
+     "calls": [
+      "re.compile"
+     ],
+     "calls_project": []
+    },
+    {
+     "line": 68,
+     "kind": "main_guard",
+     "code": "if __name__ == \"__main__\":",
+     "calls": [
+      "main"
+     ],
+     "branches": [
+      {
+       "line": 68,
+       "condition": "__name__ == \"__main__\"",
+       "has_else": false,
+       "body_lines": [
+        69,
+        69
+       ]
+      }
+     ],
+     "body": [
+      {
+       "line": 69,
+       "code": "main(*sys.argv[1:])",
+       "calls": [
+        "main"
+       ],
+       "calls_project": [
+        "analyze_logs:main"
+       ]
+      }
+     ],
+     "calls_project": [
+      "analyze_logs:main"
+     ]
+    }
+   ],
+   "module_code": "1: \"\"\"Nightly check of web server logs: error rates per endpoint, with an email if things look bad.\"\"\"\n2: import json\n3: import re\n4: import smtplib\n5: import sys\n6: from collections import Counter\n7: from email.message import EmailMessage\n9: LOG_PATH = \"logs/access.log\"\n10: REPORT_PATH = \"reports/errors.json\"\n11: ERROR_RATE_ALERT = 0.05          # alert when more than 5% of requests fail\n12: SMTP_HOST = \"mail.internal\"\n13: ONCALL = \"oncall@example.com\"\n15: LINE = re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')\n68: if __name__ == \"__main__\":\n69:     main(*sys.argv[1:])"
+  }
+ },
+ "unreached_functions": [],
+ "notes": [
+  "Static scan: nothing was executed. Order follows the source; branches are possibilities.",
+  "Functions called dynamically (getattr, registries, config-driven dispatch) may be missing."
+ ],
+ "budget": {
+  "chars_used": 2159,
+  "functions_trimmed": 0
+ }
+}

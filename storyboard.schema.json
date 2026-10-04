@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "codestory.storyboard/1",
+  "title": "codestory storyboard",
+  "description": "An ordered list of scenes that tells the story of a program. Written by an AI assistant from a codestory bundle; played by player.html.",
+  "type": "object",
+  "required": ["schema", "title", "mode", "scenes"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "codestory.storyboard/1" },
+    "title": { "type": "string", "maxLength": 80, "description": "What the program does, in plain words. e.g. 'Daily weather pipeline'." },
+    "subtitle": { "type": "string", "maxLength": 160, "description": "One sentence: input to output." },
+    "mode": { "enum": ["scan", "run"], "description": "scan = every path the code could take; run = what happened in one real run." },
+    "entry": { "type": "string", "description": "Entry point, e.g. 'main.py --date 2026-10-01'." },
+    "run": {
+      "type": "object",
+      "description": "Only for mode 'run'. Copy from the bundle's run section.",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["ok", "exit", "error"] },
+        "started_at": { "type": "string" },
+        "duration_ms": { "type": "number" },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "safe_mode": { "type": "boolean" },
+        "error": { "type": "string" }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 60,
+      "items": { "$ref": "#/$defs/scene" }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Closing card.",
+      "additionalProperties": false,
+      "properties": {
+        "headline": { "type": "string", "maxLength": 120 },
+        "stats": { "type": "array", "maxItems": 6, "items": { "$ref": "#/$defs/stat" } },
+        "notes": { "type": "array", "maxItems": 5, "items": { "type": "string", "maxLength": 200 } }
+      }
+    }
+  },
+  "$defs": {
+    "scene": {
+      "type": "object",
+      "required": ["id", "phase", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+        "phase": {
+          "enum": ["setup", "imports", "constants", "definitions", "input", "transform", "branch", "output", "finish", "error"],
+          "description": "Controls color and default layout."
+        },
+        "title": { "type": "string", "maxLength": 60, "description": "Sentence case, says what happens: 'Drop impossible temperatures'." },
+        "narration": { "type": "string", "maxLength": 320, "description": "1-3 plain sentences for a non-expert. Use real numbers from the trace in run mode." },
+        "status": {
+          "enum": ["ran", "skipped", "possible", "sandboxed", "failed"],
+          "description": "ran (run mode, executed) | skipped (run mode, not executed) | possible (scan mode) | sandboxed (ran, but side effects were intercepted) | failed (raised)."
+        },
+        "layout": { "enum": ["flow", "grid", "branch"], "description": "Default: grid for imports/constants/definitions, branch for branch, flow otherwise." },
+        "actor": { "$ref": "#/$defs/card", "description": "flow/branch: the function or step doing the work." },
+        "inputs": { "type": "array", "maxItems": 4, "items": { "$ref": "#/$defs/card" } },
+        "outputs": { "type": "array", "maxItems": 4, "items": { "$ref": "#/$defs/card" } },
+        "items": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/item" }, "description": "grid layout only." },
+        "branch": {
+          "type": "object",
+          "required": ["condition", "paths"],
+          "additionalProperties": false,
+          "properties": {
+            "condition": { "type": "string", "maxLength": 140, "description": "The code condition, e.g. 'len(anomalies) and not args.no_alerts'." },
+            "question": { "type": "string", "maxLength": 100, "description": "Plain-language version: 'Any anomalies, and alerts allowed?'" },
+            "paths": {
+              "type": "array", "minItems": 2, "maxItems": 4,
+              "items": {
+                "type": "object",
+                "required": ["label", "status"],
+                "additionalProperties": false,
+                "properties": {
+                  "label": { "type": "string", "maxLength": 60 },
+                  "status": { "enum": ["taken", "not_taken", "possible"] },
+                  "goto": { "type": "string", "description": "id of the scene this path leads to, if any." }
+                }
+              }
+            }
+          }
+        },
+        "stats": { "type": "array", "maxItems": 4, "items": { "$ref": "#/$defs/stat" } },
+        "children": { "type": "array", "maxItems": 12, "items": { "$ref": "#/$defs/scene" }, "description": "Sub-steps, played right after this scene." }
+      }
+    },
+    "card": {
+      "type": "object",
+      "required": ["kind", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["function", "data", "file", "database", "api", "constant", "config", "library", "module", "message", "email", "process"] },
+        "label": { "type": "string", "maxLength": 60 },
+        "sublabel": { "type": "string", "maxLength": 80, "description": "Path, table, URL host or a short note." },
+        "status": { "enum": ["ran", "skipped", "possible", "sandboxed", "blocked", "failed"] },
+        "detail": { "type": "string", "maxLength": 600, "description": "Shown when the viewer clicks the card." },
+        "code": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer" },
+            "snippet": { "type": "string", "maxLength": 1600, "description": "The relevant lines, verbatim from the bundle." },
+            "highlight": { "type": "array", "items": { "type": "integer" }, "description": "Absolute line numbers to emphasize." }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rows": { "type": "integer" },
+            "cols": { "type": "integer" },
+            "shape": { "type": "string", "maxLength": 40, "description": "Free text when rows/cols don't fit, e.g. '12 stations', '3 keys'." },
+            "columns": { "type": "array", "maxItems": 40, "items": { "type": "string" } },
+            "sample": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "columns": { "type": "array", "items": { "type": "string" } },
+                "rows": { "type": "array", "maxItems": 5, "items": { "type": "array", "items": { "type": "string" } } }
+              }
+            },
+            "note": { "type": "string", "maxLength": 160 }
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["label"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "maxLength": 50 },
+        "value": { "type": "string", "maxLength": 80 },
+        "kind": { "enum": ["stdlib", "third_party", "project", "constant", "config", "secret", "function", "class", "module"] },
+        "note": { "type": "string", "maxLength": 120 },
+        "status": { "enum": ["ran", "skipped", "possible"] }
+      }
+    },
+    "stat": {
+      "type": "object",
+      "required": ["label", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "maxLength": 40 },
+        "value": { "type": ["number", "string"] },
+        "unit": { "type": "string", "maxLength": 12 },
+        "delta": { "type": "number", "description": "Change versus the previous step, e.g. -37 rows." }
+      }
+    }
+  }
+}
