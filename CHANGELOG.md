@@ -4,6 +4,18 @@ All notable changes are recorded here. Versions follow [semantic versioning](htt
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-07
+
+- Added: `-m MODULE` for `scan` and `run`, for programs started with `python -m`.
+- Added: a defined `/codestory` command syntax in `SKILL.md` (`[scan | run] <entry> [options] [-- program arguments]`)
+  with `--audience` and `--out`, so every assistant parses requests the same way.
+- Added: `USAGE.md`, with invocation instructions and examples for every mode, option and assistant.
+- Docs: every argument and option is marked required or optional, with its default, in `USAGE.md`, the
+  README and `SKILL.md`.
+- Fixed: in short browser windows, the middle card of a scene could overlap the narration. Scenes now fit
+  the available height: the code shrinks with a fade (keeping the highlighted lines), sample tables are
+  dropped, grid chips tighten, and as a last resort the scene scrolls.
+
 ## 0.1.0 — 2026-10-04
 
 First public release.

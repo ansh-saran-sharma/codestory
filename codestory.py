@@ -12,6 +12,7 @@ Examples
   python codestory.py run main.py -- --date 2026-09-01 --input data/today.csv
   python codestory.py run main.py --live -- --date 2026-09-01
   python codestory.py build storyboard.json -o story.html
+  python codestory.py run -m mypackage.cli -- --verbose
 
 Standard library only. Run it with the same Python environment your project uses
 (for example, with your virtualenv activated) so that your project's imports resolve.
@@ -36,7 +37,7 @@ import threading
 import time
 import traceback
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 BUNDLE_SCHEMA = "codestory.bundle/1"
 STORYBOARD_SCHEMA = "codestory.storyboard/1"
 
@@ -94,12 +95,18 @@ def _stdlib_dirs():
 
 
 class Project:
-    def __init__(self, entry, root=None):
+    def __init__(self, entry=None, root=None, module=None):
+        self.module = module
+        if module:  # like `python -m module`: resolved from the root (default: the current folder), nothing imported
+            self.root = os.path.abspath(root or os.getcwd())
+            entry, self.entry_module = self._find_module(module)
         self.entry = os.path.abspath(entry)
         if not os.path.isfile(self.entry):
             raise SystemExit(f"Entry point not found: {entry}")
         self.entry_dir = os.path.dirname(self.entry)
-        if root:
+        if module:
+            self.entry_dir = self.root      # `python -m` puts the current folder first on sys.path
+        elif root:
             self.root = os.path.abspath(root)
         else:
             cwd = os.path.abspath(os.getcwd())
@@ -108,10 +115,22 @@ class Project:
         for r in (self.entry_dir, self.root):
             if r not in self.search_roots:
                 self.search_roots.append(r)
-        self.entry_module = os.path.splitext(os.path.basename(self.entry))[0]
+        if not module:
+            self.entry_module = os.path.splitext(os.path.basename(self.entry))[0]
         self._lib_dirs = _stdlib_dirs()
         self._cache = {}
         self.sandbox = None
+
+    def _find_module(self, module):
+        base = os.path.join(self.root, *module.split("."))
+        if os.path.isfile(os.path.join(base, "__main__.py")):
+            return os.path.join(base, "__main__.py"), module + ".__main__"
+        if os.path.isfile(base + ".py"):
+            return base + ".py", module
+        raise SystemExit(f"Module not found: {module} (looked in {self.root}; use --root to point at the folder you run `python -m` from)")
+
+    def label(self):
+        return f"-m {self.module}" if self.module else self.rel(self.entry)
 
     def rel(self, path):
         try:
@@ -1788,7 +1807,7 @@ def write_json(obj, path):
 # ----------------------------------------------------------------------------
 
 def cmd_scan(a):
-    project = Project(a.entry, a.root)
+    project = Project(a.entry, a.root, a.module)
     log(f"scanning {project.rel(project.entry)} (project root: {project.root})")
     modules = analyze_project(project)
     wanted = {}
@@ -1802,7 +1821,7 @@ def cmd_scan(a):
                        if f.get("reach_depth") is None and not f["name"].startswith("__"))
     bundle = {
         "schema": BUNDLE_SCHEMA, "tool_version": VERSION, "mode": "scan", "created": now_iso(),
-        "entry": project.rel(project.entry), "entry_module": project.entry_module,
+        "entry": project.label(), "entry_module": project.entry_module,
         "root": os.path.basename(project.root) or project.root,
         "python": sys.version.split()[0],
         "libraries": import_summary(modules),
@@ -1820,14 +1839,14 @@ def cmd_scan(a):
 
 
 def cmd_run(a, script_args):
-    project = Project(a.entry, a.root)
+    project = Project(a.entry, a.root, a.module)
     sandbox = tempfile.mkdtemp(prefix="codestory_")
     project.sandbox = sandbox
     log(f"static scan of {project.rel(project.entry)}")
     modules = analyze_project(project)
 
     mode_txt = "LIVE (side effects are real)" if a.live else "safe mode (writes go to the sandbox)"
-    log(f"running {project.rel(project.entry)} {' '.join(script_args)}  [{mode_txt}]")
+    log(f"running {project.label()} {' '.join(script_args)}  [{mode_txt}]")
     if not a.live:
         log(f"sandbox: {sandbox}")
     tracer = Tracer(project)
@@ -1845,7 +1864,10 @@ def cmd_run(a, script_args):
     tracer.start()
     t_start = time.perf_counter()
     try:
-        globals_after = runpy.run_path(project.entry, run_name="__main__")
+        if project.module:
+            globals_after = runpy.run_module(project.module, run_name="__main__", alter_sys=True)
+        else:
+            globals_after = runpy.run_path(project.entry, run_name="__main__")
     except SystemExit as e:
         code = e.code if isinstance(e.code, int) or e.code is None else 1
         outcome = {"status": "ok" if not code else "exit", "exit_code": code or 0}
@@ -1911,7 +1933,7 @@ def cmd_run(a, script_args):
     io_report = watcher.report()
     bundle = {
         "schema": BUNDLE_SCHEMA, "tool_version": VERSION, "mode": "run", "created": now_iso(),
-        "entry": project.rel(project.entry), "entry_module": project.entry_module,
+        "entry": project.label(), "entry_module": project.entry_module,
         "root": os.path.basename(project.root) or project.root,
         "python": sys.version.split()[0],
         "run": {"started_at": started, "args": [redact(x) for x in script_args],
@@ -2020,26 +2042,30 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("scan", help="read the code without running it")
-    s.add_argument("entry")
+    s.add_argument("entry", nargs="?", help="the script you normally run, e.g. main.py")
+    s.add_argument("-m", "--module", help="run or scan a module, as with `python -m MODULE` (instead of a script)")
     s.add_argument("--root", help="project root (default: current folder if it contains the entry point)")
-    s.add_argument("-o", "--out", default="codestory_bundle.json")
+    s.add_argument("-o", "--out", default="codestory_bundle.json", help="bundle file name (default: codestory_bundle.json)")
     s.add_argument("--budget", type=int, default=240_000, help="max characters of source code in the bundle")
 
     r = sub.add_parser("run", help="run the program under the tracer; arguments for your program go after --")
-    r.add_argument("entry")
-    r.add_argument("--root")
-    r.add_argument("-o", "--out", default="codestory_bundle.json")
-    r.add_argument("--budget", type=int, default=240_000)
+    r.add_argument("entry", nargs="?", help="the script you normally run, e.g. main.py")
+    r.add_argument("-m", "--module", help="run or scan a module, as with `python -m MODULE` (instead of a script)")
+    r.add_argument("--root", help="project root (default: current folder if it contains the entry point)")
+    r.add_argument("-o", "--out", default="codestory_bundle.json", help="bundle file name (default: codestory_bundle.json)")
+    r.add_argument("--budget", type=int, default=240_000, help="max characters of source code in the bundle")
     r.add_argument("--live", action="store_true", help="turn safe mode off: writes, posts and emails really happen")
     r.add_argument("--allow-subprocess", action="store_true", help="let the program start other processes in safe mode")
 
     b = sub.add_parser("build", help="embed a storyboard into the player")
     b.add_argument("storyboard")
-    b.add_argument("-o", "--out", default="story.html")
+    b.add_argument("-o", "--out", default="story.html", help="story file name (default: story.html)")
     b.add_argument("--player", help="path to player.html (default: next to this script)")
     b.add_argument("--force", action="store_true", help="build even if the storyboard has problems")
 
     a = ap.parse_args(argv)
+    if a.cmd in ("scan", "run") and bool(a.entry) == bool(a.module):
+        ap.error(f"{a.cmd} needs exactly one of: a script (main.py) or -m MODULE")
     if a.cmd == "scan":
         a.out = os.path.abspath(a.out)
         cmd_scan(a)
