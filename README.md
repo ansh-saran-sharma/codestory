@@ -17,10 +17,10 @@ It works in two modes:
 
 Two finished stories, playable in your browser:
 
-- **[Daily weather pipeline](https://YOUR-GITHUB-USERNAME.github.io/codestory/examples/weather-pipeline/story.html)**,
+- **[Daily weather pipeline](https://ansh-saran-sharma.github.io/codestory/examples/weather-pipeline/story.html)**,
   a `run`: 601 sensor readings are cleaned, summarized per station, saved to a report and a database, and
   trigger an alert, all held in safe mode.
-- **[Nightly web error check](https://YOUR-GITHUB-USERNAME.github.io/codestory/examples/log-check-scan/story.html)**,
+- **[Nightly web error check](https://ansh-saran-sharma.github.io/codestory/examples/log-check-scan/story.html)**,
   a `scan`: every path through a log checker that emails on-call when too many requests fail, without
   running it.
 
