@@ -17,10 +17,10 @@ It works in two modes:
 
 Two finished stories, playable in your browser:
 
-- **[Daily weather pipeline](https://ansh-saran-sharma.github.io/codestory/examples/weather-pipeline/story.html)**,
+- **[Daily weather pipeline](https://YOUR-GITHUB-USERNAME.github.io/codestory/examples/weather-pipeline/story.html)**,
   a `run`: 601 sensor readings are cleaned, summarized per station, saved to a report and a database, and
   trigger an alert, all held in safe mode.
-- **[Nightly web error check](https://ansh-saran-sharma.github.io/codestory/examples/log-check-scan/story.html)**,
+- **[Nightly web error check](https://YOUR-GITHUB-USERNAME.github.io/codestory/examples/log-check-scan/story.html)**,
   a `scan`: every path through a log checker that emails on-call when too many requests fail, without
   running it.
 
@@ -58,124 +58,61 @@ Requirements: Python 3.8 or later. `codestory.py` uses only the standard library
 
 ## 2. Use it from your AI assistant
 
-Whichever assistant you use, the request is the same. Tell it:
+**[USAGE.md](USAGE.md) has step-by-step instructions and examples for every mode, option and assistant.**
+The short version:
 
-- **the entry point**: the script you normally run, such as `main.py`;
-- **the mode**: explain the code (`scan`) or show what a run did (`run`). If you don't say, the assistant
-  picks from your wording and asks if it can't tell;
-- **arguments**, for `run` only: the ones you normally pass, such as `--date 2026-10-01`;
-- optionally, **the audience**: "for our product manager" gives plainer narration, "for the engineering team"
-  more technical detail.
+You invoke codestory with a chat message, and the assistant runs `codestory.py` for you. The command is the
+same everywhere (in OpenAI Codex, write `$codestory`):
 
-Example requests:
-
-```text
-/codestory main.py
-/codestory main.py scan, for a non-technical stakeholder
-Animate how pipeline/run.py works so I can onboard a new teammate.
-Show me what main.py does when run with --date 2026-10-01 --full-refresh.
-Why did only 12 rows reach the report today? Trace main.py with today's input.
-Here's my codestory_bundle.json. Turn it into a story.
+```
+/codestory [scan | run] <entry> [options] [-- program arguments]
 ```
 
-How the conversation goes depends on whether the assistant can run commands on your computer.
+```
+/codestory scan main.py --audience stakeholders        explain the code, nothing is executed
+/codestory run main.py -- --date 2026-10-01            show what one real run did, in safe mode
+/codestory run -m etl.cli --live -- --full-refresh     a module, with real side effects
+/codestory codestory_bundle.json --out today.html      make a story from a bundle you already have
+```
 
-### Agent assistants (they run commands for you)
+Only `<entry>` is required (a script, `-m module`, or a bundle file), so `/codestory main.py` is a complete
+request. Everything in `[brackets]` is optional and has a default:
 
-GitHub Copilot in VS Code (agent mode), Claude Code, OpenAI Codex, Cursor, Gemini CLI.
+| Part | Required? | Default if left out |
+|---|---|---|
+| `<entry>` | **Required** | — |
+| `scan` / `run` | Optional | Chosen from your wording; `scan` if unclear |
+| `--audience TEXT` | Optional | A mixed audience |
+| `--out FILE` | Optional | `story.html` |
+| `--root DIR` | Optional | The current folder, or the entry's folder |
+| `--budget N` | Optional | 240,000 characters of source code |
+| `--live` (`run` only) | Optional | Off: safe mode sandboxes side effects |
+| `--allow-subprocess` (`run` only) | Optional | Off: your program can't start other programs |
+| `-- ...` (`run` only) | Only if your program needs arguments | Your program runs with no arguments |
 
-1. Open your project, then open the assistant's chat.
-2. Type your request, for example `/codestory main.py`.
-3. The assistant finds your project's Python environment (for example `.venv`) and records the program:
-   - for `scan`, it runs straight away, because nothing is executed;
-   - for `run`, it **first shows you the exact command and what safe mode will do, and waits for your OK**,
-     because it is about to run your program.
-4. It writes `storyboard.json`, builds `story.html`, and tells you where the file is, plus any warnings (for
-   example, a side effect safe mode couldn't intercept).
-5. Open `story.html` in your browser.
+Plain words work just as well: "Explain how main.py works for our product manager" or "Show me what main.py
+did with --date 2026-10-01".
 
-Assistant-specific notes:
+Where you type the options depends on the assistant:
 
-**GitHub Copilot in VS Code**
-
-1. Put the folder in `<project>/.github/skills/codestory/`.
-2. Open Copilot Chat (`Ctrl+Alt+I` on Windows and Linux, `Ctrl+Cmd+I` on macOS) and switch the mode picker
-   to **Agent**. Ask and Edit modes can't run terminal commands, so the skill can't record your program there.
-3. Type `/` to check that `codestory` appears in the list, then type your request: `/codestory main.py`.
-4. When Copilot asks to run a terminal command, review it and choose **Continue** (or **Allow**).
-5. If the skill doesn't appear, check that agent skills are enabled in your VS Code settings (search
-   settings for "skills"), and that the folder contains `SKILL.md` directly, not inside a subfolder.
-
-**Claude Code**
-
-1. Put the folder in `~/.claude/skills/codestory/` or `<project>/.claude/skills/codestory/`.
-2. Start `claude` in your project folder.
-3. Type `/codestory main.py`, or describe what you want in plain words. Claude Code picks the skill from
-   your wording.
-4. Approve the `run` command when asked.
-
-**OpenAI Codex**
-
-1. Put the folder in `<project>/.agents/skills/codestory/` (or your personal Codex skills folder).
-2. Run `/skills` to check that it's listed.
-3. Mention it explicitly with `$codestory`, or describe what you want in plain words:
-   `$codestory main.py -- --date 2026-10-01`.
-4. Approve the `run` command when asked.
-
-**Cursor, Gemini CLI and other tools that support Agent Skills**
-
-Put the folder in `<project>/.agents/skills/codestory/` (or the tool's own skills folder), use the tool's
-agent mode, and ask in plain words. The steps are the same as above.
-
-### Chat assistants (you run one command, the assistant does the rest)
-
-claude.ai, ChatGPT, and other browser chats. They can't run your program on your computer, so for `run` you
-record it yourself with one command, then upload the result.
-
-**claude.ai**
-
-1. Turn on code execution: **Settings → Capabilities → Code execution and file creation**.
-2. Add the skill: in the same Capabilities settings, under **Skills**, upload `codestory.skill` (or the zip)
-   and make sure it's switched on.
-3. Start a new chat and ask.
-   - **To explain the code (`scan`)**: upload your script, or a zip of the project, and ask
-     "Explain how this code works with codestory." Claude runs the scan itself, writes the story and gives
-     you `story.html`.
-   - **To show a real run (`run`)**: on your computer, with your project's virtualenv active, run
-     ```bash
-     python codestory.py run main.py -- <your usual arguments>
-     ```
-     Then upload the `codestory_bundle.json` it creates and ask "Turn this into a story." Claude gives you
-     `story.html`. If you don't have `codestory.py` yet, ask Claude for it; it's part of the skill.
-4. Download `story.html` and open it in your browser.
-
-**ChatGPT**
-
-1. If your plan supports skills, add the skill folder there. Otherwise, create a **Project** (or a custom
-   GPT): paste the contents of `SKILL.md` into its instructions, and upload `codestory.py`, `player.html`,
-   `storyboard.schema.json` and the two files in `references/` as project files.
-2. For `run`, record the program on your computer first (the command above) and upload
-   `codestory_bundle.json`. For `scan`, uploading the script is enough if ChatGPT can run Python in your
-   plan; otherwise run `python codestory.py scan main.py` yourself and upload the bundle.
-3. Ask: "Use the codestory instructions to turn this into a story."
-4. ChatGPT returns `story.html`, or `storyboard.json` if it couldn't build the file. In that case, run
-   ```bash
-   python codestory.py build storyboard.json -o story.html
-   ```
-   or open `player.html` in your browser and drag `storyboard.json` onto it.
-
-**Any other chat assistant**
-
-Paste `SKILL.md` as instructions (or at the start of the chat), upload `codestory_bundle.json` and
-`storyboard.schema.json`, and ask for `storyboard.json`. Then build it with the command above, or drop it onto
-`player.html`.
+- **Agents** (Claude Code, GitHub Copilot in Agent mode, OpenAI Codex, Cursor, Gemini CLI) run commands on
+  your computer, so everything goes in the chat. For `run`, the agent shows you the exact command and waits
+  for your OK before executing your program.
+- **Chat assistants** (claude.ai, ChatGPT) can't run your program on your computer. For `scan`, upload your
+  code and send the command. For `run`, record it in your terminal first, then upload the bundle:
+  ```bash
+  python codestory.py run main.py -- --date 2026-10-01       # in your terminal, virtualenv active
+  ```
+  ```
+  /codestory codestory_bundle.json --audience stakeholders    # in the chat, with the bundle uploaded
+  ```
 
 ## 3. Use it from the command line
 
 The same three steps the assistant performs:
 
 ```bash
-# 1. Record (pick one). Run with your project's Python environment active.
+# 1. Record (pick one; everything after the script name is optional). Run with your project's Python environment active.
 python codestory.py scan main.py                        # explain the code: nothing is executed
 python codestory.py run  main.py -- --date 2026-10-01   # one real run; arguments for your program go after --
 
@@ -185,17 +122,21 @@ python codestory.py run  main.py -- --date 2026-10-01   # one real run; argument
 python codestory.py build storyboard.json -o story.html
 ```
 
-Options:
+Required: for `scan` and `run`, the script or `-m MODULE` (one of the two); for `build`, the storyboard file.
+Everything else is optional:
 
-| Command | Option | What it does |
-|---|---|---|
-| `scan`, `run` | `-o FILE` | Bundle file name (default `codestory_bundle.json`) |
-| `scan`, `run` | `--root DIR` | Project root, when it isn't the current folder or the entry script's folder |
-| `scan`, `run` | `--budget N` | Maximum characters of source code in the bundle (default 240,000) |
-| `run` | `--live` | Turn safe mode off: writes, posts and emails really happen |
-| `run` | `--allow-subprocess` | Let the program start other programs in safe mode |
-| `build` | `-o FILE` | Output file name (default `story.html`) |
-| `build` | `--force` | Build even if the storyboard has problems (not recommended) |
+| Command | Argument or option | Required? | Default if left out | What it does |
+|---|---|---|---|---|
+| `scan`, `run` | `script.py` or `-m MODULE` | **Required (one of the two)** | — | What to record; `-m` works like `python -m MODULE` |
+| `scan`, `run` | `-o FILE` | Optional | `codestory_bundle.json` | Bundle file name |
+| `scan`, `run` | `--root DIR` | Optional | The current folder, or the entry's folder | Project root |
+| `scan`, `run` | `--budget N` | Optional | 240,000 | Maximum characters of source code in the bundle |
+| `run` | `--live` | Optional | Off (safe mode on) | Writes, posts and emails really happen |
+| `run` | `--allow-subprocess` | Optional | Off | Let the program start other programs in safe mode |
+| `run` | `-- ARGS` | Only if your program needs them | No arguments | Arguments for your program |
+| `build` | `storyboard.json` | **Required** | — | The storyboard to play |
+| `build` | `-o FILE` | Optional | `story.html` | Story file name |
+| `build` | `--force` | Optional | Off | Build even if the storyboard has problems (not recommended) |
 
 Watching a story: space plays and pauses; the left and right arrows move between scenes; Home and End jump to
 the start and end. Click any card to see its code, columns and sample rows. Click a station on the line at
@@ -261,6 +202,7 @@ Check the bundle before uploading it to a chat assistant if your data is sensiti
 
 ## 8. Files
 
+- `USAGE.md`: how to invoke codestory in each assistant, with examples for every mode and option.
 - `SKILL.md`: instructions that teach the assistant to write a good storyboard from a bundle.
 - `references/bundle-format.md`, `references/example-storyboard.json`: read by the assistant when needed.
 - `codestory.py`: scan, run, build. Python 3.8+, standard library only.

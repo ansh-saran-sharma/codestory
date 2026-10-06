@@ -19,10 +19,51 @@ Files in this skill folder:
 
 ## 1. Understand the request
 
-Work out three things from the user's message. Ask only for what you cannot infer, in one question.
+### The `/codestory` command
 
-**Entry point.** The script they normally run (`main.py`, `run_pipeline.py`, `python -m app`). If they named a
-folder, look for `if __name__ == "__main__":`, a `main.py`, or the command in their README or Makefile.
+Users may invoke you with this exact syntax (in Codex it starts with `$codestory`). Parse it strictly:
+
+```
+/codestory [scan | run] <entry> [options] [-- program arguments]
+```
+
+Only `<entry>` is required. Everything else is optional; when it's missing, use the default below and don't
+ask about it.
+
+| Part | Required? | Default if missing | Meaning | Becomes |
+|---|---|---|---|---|
+| `<entry>` | **Required** (ask if missing) | — | The script they normally run: `main.py`, `jobs/nightly.py`. Or `-m package.module` for programs started with `python -m`. Or a `codestory_bundle.json`: then skip section 2 and write the story from it. | the entry argument, or `-m MODULE` |
+| `scan` / `run` | Optional | Infer from wording (below); if nothing to go on, `scan` | The mode. | the `codestory.py` subcommand |
+| `--live` | Optional, run only | Off: safe mode | Real side effects, no sandbox. | `run --live` |
+| `--allow-subprocess` | Optional, run only | Off | Let the program start other programs. | `run --allow-subprocess` |
+| `--root DIR` | Optional | Omit; codestory picks the folder | The project root, when it isn't the current folder. | `--root DIR` |
+| `--budget N` | Optional | Omit (240,000) | Max characters of source code in the bundle. | `--budget N` |
+| `--audience TEXT` | Optional | A mixed audience | Who the story is for: `stakeholders`, `engineers`, `new team members`, or any description. | narration style (section 5) |
+| `--out FILE` | Optional | `story.html` | Name of the story file. | `build -o FILE` |
+| `-- ...` | Optional; needed only if their program requires arguments | No program arguments | Everything after a bare `--` belongs to the user's program, unchanged. | appended after `--` |
+
+Examples, and what you run:
+
+```
+/codestory main.py                                   -> infer mode from context; if none, scan
+/codestory scan main.py --audience stakeholders      -> codestory.py scan main.py
+/codestory run main.py -- --date 2026-10-01          -> codestory.py run main.py -- --date 2026-10-01
+/codestory run -m etl.cli --live -- --full-refresh   -> codestory.py run -m etl.cli --live -- --full-refresh
+/codestory codestory_bundle.json --out today.html    -> no recording; storyboard, then build -o today.html
+```
+
+Users will just as often write plain language. Map it the same way: "explain", "walk through", "how does it work"
+mean `scan`; "what happened", "today's run", "with these arguments" mean `run`; "for real", "don't sandbox",
+"actually write the files" mean `--live`; "for my manager" sets the audience. Unknown options: ask, don't guess.
+Never add `--live` or `--allow-subprocess` on your own.
+
+### What to work out
+
+Work out these things from the request. Ask only for what you cannot infer, in one question.
+
+**Entry point.** The script they normally run (`main.py`, `run_pipeline.py`), or a module started with
+`python -m app` (use `-m app`). If they named a folder, look for `if __name__ == "__main__":`, a `main.py`, a
+`__main__.py`, or the command in their README or Makefile.
 
 **Mode.**
 - `scan` when they want to *explain the code*: "how does this work", onboarding, a walkthrough for a colleague or
@@ -47,8 +88,9 @@ Pick the path that matches what you can do in this environment.
    instructions, and use that interpreter. The program's imports must resolve, so the system Python is usually wrong.
 2. `scan`: run it straight away. It reads files and executes nothing.
    ```bash
-   <python> <skill>/codestory.py scan <entry.py> -o codestory_bundle.json
+   <python> <skill>/codestory.py scan <entry.py> -o codestory_bundle.json [--root DIR] [--budget N]
    ```
+   For a module, use `-m package.module` instead of the script path, from the folder they run `python -m` in.
 3. `run`: **ask before executing**, because it runs the user's program. Show the exact command and what safe mode
    will do, in a few lines:
    > I'll run `python codestory.py run main.py -- --date 2026-10-01`. Safe mode is on: file writes go to a temporary
@@ -69,7 +111,9 @@ Pick the path that matches what you can do in this environment.
   ```bash
   python codestory.py run main.py -- <their usual arguments>
   ```
-  They need `codestory.py` from this skill; offer it as a download.
+  Put any options they asked for into that command (`--live`, `--allow-subprocess`, `--root`, `--budget`, `-m`),
+  because in this environment they are the one running it. Options about the story (`--audience`, `--out`) stay
+  with you. They need `codestory.py` from this skill; offer it as a download.
 
 ### C. No code execution at all
 
@@ -220,7 +264,7 @@ records sent. Use `delta` for a change versus the previous step. Skip stats in s
 1. Write `storyboard.json` following `storyboard.schema.json` exactly. Copy `run` fields from the bundle
    (`status`, `started_at`, `duration_ms`, `args`, `safe_mode`, and `error` if any). Set `entry` to the command as
    the user would type it, without `python`: `main.py --date 2026-10-01`.
-2. Build:
+2. Build (use the name from `--out` if they gave one):
    ```bash
    python <skill>/codestory.py build storyboard.json -o story.html
    ```
