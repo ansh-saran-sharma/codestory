@@ -1,0 +1,88 @@
+{
+ "schema": "codestory.walkthrough/1",
+ "title": "Nightly web error check, line by line",
+ "subtitle": "Every path through the log checker: read the log, count failures per endpoint, write a report, email on-call above 5%.",
+ "entry": "analyze_logs.py [log file]",
+ "explanations": {
+  "analyze_logs.py:2": {
+   "title": "Import the standard library",
+   "text": "Everything comes from the standard library: re for parsing, Counter for tallies, json for the report, smtplib and EmailMessage for the alert."
+  },
+  "analyze_logs.py:9": {
+   "title": "Define the settings",
+   "text": "Paths, the alert threshold (5% of requests) and the mail settings, as module constants."
+  },
+  "analyze_logs.py:15": {
+   "title": "Compile the log-line pattern once",
+   "text": "re.compile at import time avoids recompiling for every line. Named groups (?P<name>...) let groupdict() return a dict keyed by field name."
+  },
+  "analyze_logs.py:68": {
+   "title": "Run main() when executed as a script",
+   "text": "Arguments from the command line are unpacked into main(), so an optional path argument overrides LOG_PATH."
+  },
+  "analyze_logs.py:56": {
+   "title": "Open the log file",
+   "text": "The with block guarantees the file is closed even if parsing fails. fh is a lazy line iterator; nothing is read yet."
+  },
+  "analyze_logs.py:57": {
+   "title": "Parse and summarise in one pass",
+   "text": "parse(fh) is a generator, so this builds a pipeline: summarize pulls one parsed request at a time, and parse reads one line at a time. The whole log is never held in memory."
+  },
+  "analyze_logs.py:34": {
+   "title": "Start two counters",
+   "text": "Counter is a dict subclass whose missing keys read as 0, so += 1 works without initialising each endpoint."
+  },
+  "analyze_logs.py:35": {
+   "title": "Consume the parsed requests",
+   "text": "Each iteration resumes the parse generator until it yields the next request dict."
+  },
+  "analyze_logs.py:36": {
+   "title": "Normalise the path",
+   "text": "Collapses ids so /orders/123 and /orders/456 count as the same endpoint."
+  },
+  "analyze_logs.py:38": {
+   "title": "Count server errors",
+   "text": "Status 500 and above is a server-side failure; 4xx client errors are deliberately not counted."
+  },
+  "analyze_logs.py:40": {
+   "title": "Build one row per endpoint",
+   "text": "most_common() orders endpoints by request count. errors[ep] is 0 for endpoints without failures, thanks to Counter."
+  },
+  "analyze_logs.py:20": {
+   "title": "Iterate over the raw lines",
+   "text": "Iterating a file object yields one line at a time, including its trailing newline."
+  },
+  "analyze_logs.py:21": {
+   "title": "Match the line",
+   "text": "search returns a Match object or None. Lines that don't fit the pattern, such as garbage or truncated writes, produce None."
+  },
+  "analyze_logs.py:22": {
+   "title": "Skip lines that didn't match",
+   "text": "Only matched lines are turned into records; the rest are dropped silently, which hides how much of the log was unreadable."
+  },
+  "analyze_logs.py:24": {
+   "title": "Convert the status to an integer",
+   "text": "groupdict values are strings; the numeric comparison later needs an int."
+  },
+  "analyze_logs.py:25": {
+   "title": "Hand one record to the consumer",
+   "text": "yield suspends parse here and returns d to summarize's for loop; execution resumes on the next line when the next item is requested."
+  },
+  "analyze_logs.py:62": {
+   "title": "Compute the overall failure rate",
+   "text": "The conditional expression guards against an empty log, where total would be 0."
+  },
+  "analyze_logs.py:63": {
+   "title": "Alert above the threshold",
+   "text": "Compares the night's failure rate with ERROR_RATE_ALERT (0.05). The email is only sent above 5%."
+  },
+  "analyze_logs.py:49": {
+   "title": "Pick the five worst endpoints",
+   "text": "sorted with a key function and reverse=True orders by error count, highest first; the slice keeps the top five."
+  },
+  "analyze_logs.py:51": {
+   "title": "Connect to the mail server",
+   "text": "smtplib.SMTP opens the connection in its constructor; as a context manager it sends QUIT on exit."
+  }
+ }
+}

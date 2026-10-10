@@ -1,4 +1,4 @@
-# Bundle format (`codestory.bundle/1`)
+# Bundle format (`codestory.bundle/2`)
 
 `codestory.py scan` and `codestory.py run` write `codestory_bundle.json`. This is what each part means and how to
 use it when writing a storyboard. Fields marked *(run)* exist only in run mode.
@@ -13,6 +13,10 @@ use it when writing a storyboard. Fields marked *(run)* exist only in run mode.
 7. `io` *(run)*
 8. Value summaries
 9. Unexecuted, unreached and budget
+10. Walkthrough sections (`--view walkthrough`)
+
+Version 2 adds the walkthrough sections (section 10). Everything in version 1 is unchanged, and a bundle recorded
+without `--view walkthrough` has no new sections.
 
 ## 1. Top level
 
@@ -142,9 +146,92 @@ Never full data. By type:
 - Anything whose name looks like a secret is `"***"`; tokens, passwords in URLs and bearer headers are masked inside strings.
 
 ## 9. Unexecuted, unreached and budget
+10. Walkthrough sections (`--view walkthrough`)
 
 - `unexecuted_functions` *(run)*: project functions that exist but didn't run. Use it to identify untaken branches.
 - `unreached_functions` *(scan)*: functions not reachable statically from the entry point. Either dead code or
   dynamically called. Don't present them as part of the flow.
 - `budget`: `{chars_used, functions_trimmed}`. Source included versus the `--budget` limit.
 - `notes` *(scan)*: reminders about what static analysis can't see.
+
+## 10. Walkthrough sections (`--view walkthrough`)
+
+Present only when recorded with `--view walkthrough`.
+
+| Field | Meaning |
+|---|---|
+| `view` | `"walkthrough"` |
+| `focus` | `"whole program"`, or the files and functions chosen with `--focus` |
+| `sources` | Full source text of every file in focus, keyed by path |
+| `statements` | The statement map: every statement in those files, keyed by statement id |
+| `docstrings` | Docstrings of modules, classes and functions, keyed by scope id |
+| `plan` | The ordered steps of the walkthrough |
+| `lines` *(run)* | The raw line events the plan was built from, per-line execution totals, and limits |
+
+### Statements
+
+Statement ids are `file:line` (the first line, including decorators), with `#2`, `#3` for a second statement
+starting on the same line.
+
+```json
+"etl/clean.py:15": {"id": "etl/clean.py:15", "file": "etl/clean.py", "line": 15, "end": 15, "kind": "assign",
+  "scope": "etl.clean:drop_invalid", "parent": "etl/clean.py:13", "block": "body",
+  "reads": ["df"], "writes": ["df"], "names": {"df": {"kind": "parameter"}},
+  "calls": [{"call": "df.dropna", "origin": "method", "on": "df"}]}
+```
+
+- `kind`: `import`, `constant`, `assign`, `call`, `return`, `yield`, `if`, `for`, `while`, `with`, `try`, `raise`,
+  `assert`, `def`, `class`, `match`, `delete`, `pass`, `break`, `continue`, `scope`, `expr`.
+- `line`–`end` cover the statement's own lines. For compound statements (`if`, `for`, `def`...) that's the header
+  only; `full_end` includes the body, and `blocks` lists the statement ids in each block (`body`, `orelse`,
+  `finalbody`, `handler0`..., `case0`...).
+- `scope`: the function (`module:qualname`), class, or `module:<module>` the statement belongs to.
+- `reads`, `writes`, `mutates`: names the statement reads, assigns, and changes in place (`df.loc[...] = ...`).
+  Comprehension variables are excluded.
+- `names`: where each name comes from: `parameter`, `local`, `constant` (with `value`), `global`, `function` or
+  `class` (with `where`, as `file:line`), `import_project` (with `from`, `where`), `import_package` or
+  `import_stdlib` (with `from`, `package`), `builtin`, `unknown`.
+- `calls`, in evaluation order (arguments before the call that receives them): `origin` is `project` (with `id`
+  and `where`), `package` or `stdlib` (with `qualified`, e.g. `pandas.read_csv`), `builtin`, or `method` (with
+  `on`, the variable it's called on).
+- `references`: project functions used as values here (passed, stored or looped over) rather than called.
+- `imports_modules`: project modules an import statement loads.
+- `io`: I/O visible in the source, as in the function-level `io` list.
+- `hint` (annotated assignment), `hints` (function parameters and return), `defines`, `doc`, `generator`
+  (definitions), `value` (constants; `***` for secret-looking names), `comments` (on or just above the statement).
+- `group`: `import`, `constant`, `simple` or `definition` when consecutive statements of this kind may be shown as
+  one step.
+
+### Plan
+
+```json
+{"view": "walkthrough", "mode": "run", "focus": "whole program", "max_steps": 150,
+ "steps": [...], "explain_first": ["etl/extract.py:7", ...], "truncated": false,
+ "counts": {"steps": 117, "visible_steps": 117, "statements": 97}}
+```
+
+`explain_first` lists up to `max_steps` statement ids in order of importance: statements that change data, branch,
+call into focused code, do I/O, or raise come first. Write explanations for these first.
+
+Each step has an `id` (`s1`, `s2`, ...), a `type` and a `depth` (call depth within the focus). By type:
+
+| `type` | Fields |
+|---|---|
+| `statement` | `stmt`, `file`, `lines`; *(run)* `call` (trace node), `occurrence`, `executions`, `changes`, `changes_unrecorded`, `value` (on `return`/`yield`), `io`, `raised`; `branch` on `if`/`match` (`taken`: `body`, `orelse`, `none`, or `possible` in scan); `loop` on `for`/`while` (`iterations`); *(scan)* `possible` (inside a branch), `repeats` (inside a loop), `see` (steps where a function already walked through starts) |
+| `group` | Like `statement`, with `stmts` (several consecutive simple statements) instead of `stmt` |
+| `enter` | Stepping into a function or module: `fn`, `from_step` (the call site), `args` *(run)*, `caller`, `via` (`import`, or `reference` for functions called through a variable), `def_stmt` *(scan)* |
+| `return` | Back to the caller: `fn`, `to_step`, `value` *(run)*, `yield` (true when a generator yielded), `changes` (what the call site's statement changed, shown here because it happens on return), `changes_of`, `raised` |
+| `loop_summary` | After the first iteration of a loop with more than 3 iterations: `stmt`, `iterations`, `detailed_iterations`, `changes` (the latest value of each variable the loop changed) |
+| `unfocused_call` | A call into project code outside `--focus`: `fn`, `from_step`, *(run)* `args`, `value`, `repeats` |
+
+Steps with `hidden_by` belong to iterations 2 and 3 of a collapsed loop: the player shows them on request.
+`changes` and `value` are value summaries (section 8); `in_place: true` marks a value changed without being
+reassigned.
+
+### Lines *(run)*
+
+`lines.events` are the raw line events: `seq`, `node`, `file`, `line`, `occ` (execution of that line in that call),
+`t_ms`, `changes`, `changes_unrecorded` (changes made by lines that ran without being recorded), `raised`.
+`lines.totals` gives every line's execution count; `lines.stats` the number recorded and counted only. The first 3
+executions of each line in each call are recorded; later ones are counted. Lambdas and comprehensions are not
+line-traced: they belong to the line that contains them.

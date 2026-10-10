@@ -276,45 +276,12 @@ svg.wires path.maybe { stroke-dasharray: 6 7; }
 </div>
 
 <script id="storyboard" type="application/json">{"schema": "codestory.storyboard/1", "title": "Nightly web error check", "subtitle": "Last night's web server log becomes an error report per endpoint, and an email to on-call if too many requests failed.", "mode": "scan", "entry": "analyze_logs.py [log file]", "scenes": [{"id": "imports", "phase": "imports", "title": "Bring in the tools", "narration": "Everything this script needs is built into Python: pattern matching for log lines, counting, JSON files and sending email.", "items": [{"label": "re", "kind": "stdlib", "note": "patterns"}, {"label": "collections", "kind": "stdlib", "note": "counting"}, {"label": "json", "kind": "stdlib", "note": "report file"}, {"label": "smtplib", "kind": "stdlib", "note": "sending mail"}, {"label": "email", "kind": "stdlib", "note": "building mail"}]}, {"id": "settings", "phase": "constants", "title": "Read the settings", "narration": "The script knows where the log and the report live, who is on call, and its alarm threshold: an email goes out when more than 5% of requests fail.", "items": [{"label": "LOG_PATH", "value": "logs/access.log", "kind": "constant"}, {"label": "REPORT_PATH", "value": "reports/errors.json", "kind": "constant"}, {"label": "ERROR_RATE_ALERT", "value": "0.05", "kind": "constant", "note": "5%"}, {"label": "SMTP_HOST", "value": "mail.internal", "kind": "constant"}, {"label": "ONCALL", "value": "oncall@example.com", "kind": "constant"}, {"label": "LINE", "value": "pattern for one log line", "kind": "constant", "note": "IP, method, path, status, size"}]}, {"id": "read-log", "phase": "input", "title": "Open last night's log", "narration": "The access log is opened and read line by line. A different log file can be passed on the command line.", "inputs": [{"kind": "file", "label": "access.log", "sublabel": "logs/access.log, or the path given on the command line"}], "actor": {"kind": "function", "label": "main()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 55, "snippet": "def main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate", "highlight": [56]}}, "outputs": [{"kind": "data", "label": "fh", "data": {"shape": "one line per request"}, "detail": "The file is streamed, so even a very large log is never loaded all at once."}]}, {"id": "parse", "phase": "transform", "title": "Pick out the useful parts of each line", "narration": "Each line is matched against the log pattern to pull out the method, path and status code. Lines that don't fit the pattern are skipped quietly.", "inputs": [{"kind": "data", "label": "lines", "data": {"shape": "raw text lines"}}], "actor": {"kind": "function", "label": "parse()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 18, "snippet": "def parse(lines):\n    \"\"\"Turn raw log lines into dicts; skip lines that don't match.\"\"\"\n    for line in lines:\n        m = LINE.search(line)\n        if m:\n            d = m.groupdict()\n            d[\"status\"] = int(d[\"status\"])\n            yield d", "highlight": [21, 22, 25]}}, "outputs": [{"kind": "data", "label": "requests", "data": {"shape": "one record per request", "columns": ["ip", "method", "path", "status", "bytes"]}}]}, {"id": "summarize", "phase": "transform", "title": "Count requests and failures per endpoint", "narration": "Requests are tallied per endpoint. Any status of 500 or above counts as a failure, and each endpoint gets its own error rate.", "inputs": [{"kind": "data", "label": "requests", "data": {"shape": "one record per request"}}], "actor": {"kind": "function", "label": "summarize()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 33, "snippet": "def summarize(requests):\n    total, errors = Counter(), Counter()\n    for r in requests:\n        ep = endpoint(r[\"path\"])\n        total[ep] += 1\n        if r[\"status\"] >= 500:\n            errors[ep] += 1\n    return [{\"endpoint\": ep, \"requests\": n, \"errors\": errors[ep], \"error_rate\": round(errors[ep] / n, 4)}\n            for ep, n in total.most_common()]", "highlight": [37, 38, 39]}}, "outputs": [{"kind": "data", "label": "rows", "data": {"shape": "one row per endpoint", "columns": ["endpoint", "requests", "errors", "error_rate"]}}], "children": [{"id": "endpoint", "phase": "transform", "title": "Treat /orders/123 and /orders/456 as one", "narration": "Numeric ids and query strings are stripped from each path, so the same endpoint is counted together instead of as thousands of separate URLs.", "inputs": [{"kind": "data", "label": "path", "data": {"shape": "/orders/123?ref=mail"}}], "actor": {"kind": "function", "label": "endpoint()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 28, "snippet": "def endpoint(path):\n    \"\"\"Collapse ids so /orders/123 and /orders/456 count together.\"\"\"\n    return re.sub(r\"/\\d+\", \"/:id\", path.split(\"?\")[0])", "highlight": [30]}}, "outputs": [{"kind": "data", "label": "endpoint", "data": {"shape": "/orders/:id"}}]}]}, {"id": "write-report", "phase": "output", "title": "Save the error report", "narration": "The per-endpoint table is saved as a JSON report, busiest endpoints first.", "inputs": [{"kind": "data", "label": "rows", "data": {"shape": "one row per endpoint"}}], "actor": {"kind": "function", "label": "main()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 55, "snippet": "def main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate", "highlight": [58, 59]}}, "outputs": [{"kind": "file", "label": "errors.json", "sublabel": "reports/errors.json"}]}, {"id": "rate", "phase": "transform", "title": "Work out the overall failure rate", "narration": "All requests and all failures are added up across endpoints to get one failure rate for the night. An empty log counts as zero.", "inputs": [{"kind": "data", "label": "rows", "data": {"shape": "one row per endpoint"}}], "actor": {"kind": "function", "label": "main()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 55, "snippet": "def main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate", "highlight": [60, 61, 62]}}, "outputs": [{"kind": "data", "label": "rate", "data": {"shape": "one number, e.g. 0.031"}}]}, {"id": "decide", "phase": "branch", "title": "Decide whether to wake someone up", "narration": "If more than 5% of requests failed, the on-call engineer gets an email. Otherwise the script finishes quietly with just the report.", "actor": {"kind": "function", "label": "main()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 55, "snippet": "def main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate", "highlight": [63]}}, "branch": {"condition": "rate > ERROR_RATE_ALERT", "question": "Did more than 5% of requests fail?", "paths": [{"label": "Email the on-call engineer", "status": "possible", "goto": "alert"}, {"label": "Finish with only the report", "status": "possible"}]}}, {"id": "alert", "phase": "output", "title": "Email the on-call engineer", "narration": "The email names the failure rate in its subject and lists the five endpoints with the most errors, sent through the internal mail server.", "inputs": [{"kind": "data", "label": "rows", "data": {"shape": "one row per endpoint"}}], "actor": {"kind": "function", "label": "send_alert()", "sublabel": "analyze_logs.py", "code": {"file": "analyze_logs.py", "line": 44, "snippet": "def send_alert(rows, rate):\n    msg = EmailMessage()\n    msg[\"Subject\"] = f\"Error rate {rate:.1%} in last night's traffic\"\n    msg[\"To\"] = ONCALL\n    msg[\"From\"] = \"logbot@example.com\"\n    worst = sorted(rows, key=lambda r: r[\"errors\"], reverse=True)[:5]\n    msg.set_content(\"\\n\".join(f'{r[\"endpoint\"]}: {r[\"errors\"]} errors' for r in worst))\n    with smtplib.SMTP(SMTP_HOST) as s:\n        s.send_message(msg)", "highlight": [46, 49, 52]}}, "outputs": [{"kind": "email", "label": "oncall@example.com", "sublabel": "via mail.internal", "detail": "Subject: 'Error rate N% in last night's traffic'. Body: the five worst endpoints and their error counts."}]}], "summary": {"headline": "Every night, a raw log becomes an error report per endpoint, and an email when failures pass 5%.", "notes": ["This walkthrough was read from the code; nothing was executed. Run it with codestory run to see real counts for a specific night."]}}</script>
-<script>
-(function () {
+<script>/* codestory animation engine (MIT). Shared by player.html and walkthrough.html; `build` embeds it.
+   A small timeline: tweens of opacity, visibility, position, scale, stroke offset and plain-object values,
+   placed at absolute times. Every value is a pure function of the playhead, so seeking and scrubbing in either
+   direction always land on the same frame. */
+(function (global) {
 "use strict";
-
-const PHASE = { setup: "Start", imports: "Imports", constants: "Constants", definitions: "Definitions", input: "Input",
-  transform: "Transform", branch: "Decision", output: "Output", finish: "Finish", error: "Error" };
-const STATUS = { ran: "", skipped: "Did not run this time", possible: "Possible path", sandboxed: "Ran in safe mode",
-  failed: "Failed", blocked: "Blocked by safe mode" };
-const KIND = { function: "Function", data: "Data", file: "File", database: "Database", api: "Web API", constant: "Constant",
-  config: "Setting", library: "Library", module: "Module", message: "Message", email: "Email", process: "Program" };
-const GROUP = { stdlib: "Built into Python", third_party: "Installed packages", project: "Your project", constant: "Constants",
-  config: "From settings or environment", secret: "Secrets (hidden)", function: "Functions", class: "Classes", module: "Modules" };
-const ICON = {
-  file: '<path d="M4 1.5h5l3 3v10H4z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-  database: '<ellipse cx="8" cy="4" rx="5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-  api: '<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" fill="none" stroke="currentColor" stroke-width="1.2"/>',
-  data: '<path d="M2 3h12v10H2zM2 6.5h12M2 10h12M6 3v10" fill="none" stroke="currentColor" stroke-width="1.3"/>',
-  function: '<path d="M5 2.5C3.5 2.5 3.5 4 3.5 5.5S2 8 2 8s1.5 1 1.5 2.5S3.5 13.5 5 13.5M11 2.5c1.5 0 1.5 1.5 1.5 3S14 8 14 8s-1.5 1-1.5 2.5.0 3-1.5 3" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-  email: '<path d="M2 3.5h12v9H2zM2 4l6 5 6-5" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-  constant: '<path d="M4 6h8M4 10h8" stroke="currentColor" stroke-width="1.6"/>',
-  config: '<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v2.5M8 12v2.5M1.5 8H4M12 8h2.5M3.4 3.4l1.8 1.8M10.8 10.8l1.8 1.8M3.4 12.6l1.8-1.8M10.8 5.2l1.8-1.8" stroke="currentColor" stroke-width="1.3"/>',
-  message: '<path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-  process: '<path d="M2 3h12v10H2zM4.5 6.5l2 1.5-2 1.5M8 10h3" fill="none" stroke="currentColor" stroke-width="1.3"/>',
-  library: '<path d="M3 2.5h3v11H3zM7 2.5h3v11H7zM11 3l2.5.6-2 10.4L9 13.4" fill="none" stroke="currentColor" stroke-width="1.3"/>',
-  module: '<path d="M2 4l6-2.5L14 4v8l-6 2.5L2 12zM2 4l6 2.5L14 4M8 6.5v8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
-};
-
-const $ = (id) => document.getElementById(id);
-const nf = new Intl.NumberFormat();
-const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-
-let SB = null, flat = [], tl = null, cards = new Map(), cardSeq = 0, layers = [], starts = [];
-
-/* ---------- animation engine ----------
-   A small timeline: tweens of opacity, visibility, position, scale, stroke offset and plain-object
-   values, placed at absolute times. Every value is a pure function of the playhead, so seeking and
-   scrubbing in either direction always land on the same frame. */
 const EASE = {
   none: (p) => p,
   "power1.out": (p) => 1 - (1 - p) * (1 - p),
@@ -438,6 +405,46 @@ const anim = {
     flushTransforms(xform);
   }
 };
+
+global.CodestoryAnim = { anim, makeTimeline, EASE };
+})(window);
+</script>
+<script>
+(function () {
+"use strict";
+
+const PHASE = { setup: "Start", imports: "Imports", constants: "Constants", definitions: "Definitions", input: "Input",
+  transform: "Transform", branch: "Decision", output: "Output", finish: "Finish", error: "Error" };
+const STATUS = { ran: "", skipped: "Did not run this time", possible: "Possible path", sandboxed: "Ran in safe mode",
+  failed: "Failed", blocked: "Blocked by safe mode" };
+const KIND = { function: "Function", data: "Data", file: "File", database: "Database", api: "Web API", constant: "Constant",
+  config: "Setting", library: "Library", module: "Module", message: "Message", email: "Email", process: "Program" };
+const GROUP = { stdlib: "Built into Python", third_party: "Installed packages", project: "Your project", constant: "Constants",
+  config: "From settings or environment", secret: "Secrets (hidden)", function: "Functions", class: "Classes", module: "Modules" };
+const ICON = {
+  file: '<path d="M4 1.5h5l3 3v10H4z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  database: '<ellipse cx="8" cy="4" rx="5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  api: '<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+  data: '<path d="M2 3h12v10H2zM2 6.5h12M2 10h12M6 3v10" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  function: '<path d="M5 2.5C3.5 2.5 3.5 4 3.5 5.5S2 8 2 8s1.5 1 1.5 2.5S3.5 13.5 5 13.5M11 2.5c1.5 0 1.5 1.5 1.5 3S14 8 14 8s-1.5 1-1.5 2.5.0 3-1.5 3" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  email: '<path d="M2 3.5h12v9H2zM2 4l6 5 6-5" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  constant: '<path d="M4 6h8M4 10h8" stroke="currentColor" stroke-width="1.6"/>',
+  config: '<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v2.5M8 12v2.5M1.5 8H4M12 8h2.5M3.4 3.4l1.8 1.8M10.8 10.8l1.8 1.8M3.4 12.6l1.8-1.8M10.8 5.2l1.8-1.8" stroke="currentColor" stroke-width="1.3"/>',
+  message: '<path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  process: '<path d="M2 3h12v10H2zM4.5 6.5l2 1.5-2 1.5M8 10h3" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  library: '<path d="M3 2.5h3v11H3zM7 2.5h3v11H7zM11 3l2.5.6-2 10.4L9 13.4" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  module: '<path d="M2 4l6-2.5L14 4v8l-6 2.5L2 12zM2 4l6 2.5L14 4M8 6.5v8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+};
+
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat();
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+let SB = null, flat = [], tl = null, cards = new Map(), cardSeq = 0, layers = [], starts = [];
+
+const { anim } = window.CodestoryAnim;
 
 /* ---------- loading ---------- */
 function boot() {

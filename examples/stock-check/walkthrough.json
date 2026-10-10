@@ -1,0 +1,31 @@
+{
+ "schema": "codestory.walkthrough/1",
+ "title": "Nightly stock check, line by line",
+ "subtitle": "One run over 40 products: load the stock file, work out what each needs, group orders by supplier, write them out.",
+ "entry": "reorder.py",
+ "explanations": {
+  "reorder.py:2": {"title": "Import from the standard library", "text": "csv for parsing the stock file, json for writing the orders, sys for the optional path argument, and dataclass to generate Item's __init__ and __repr__ from its annotated fields."},
+  "reorder.py:7": {"title": "Define the reorder policy", "text": "SAFETY_DAYS is how many days of sales to keep on hand, MIN_ORDER the smallest quantity worth ordering. Both are read by needed() for every product."},
+  "reorder.py:13": {"title": "Define the Item record and the functions", "text": "@dataclass turns the four annotated class attributes into constructor parameters, so Item(sku, on_hand, daily_sales, supplier) works without a hand-written __init__. The annotations are not enforced: the conversion to int and float happens in load()."},
+  "reorder.py:49": {"title": "Run main() when executed as a script", "text": "sys.argv[1:] is unpacked into main(), so an optional first argument replaces the default STOCK_CSV path."},
+  "reorder.py:42": {"title": "Load the stock file", "text": "Calls load() and binds the list of Item records it returns."},
+  "reorder.py:22": {"title": "Open the CSV for reading", "text": "newline=\"\" is what the csv module expects: it lets the reader handle line endings itself, including newlines inside quoted fields."},
+  "reorder.py:23": {"title": "Parse every row into an Item", "text": "csv.DictReader yields one dict per row keyed by the header line. The list comprehension converts on_hand to int and daily_sales to float, because the reader returns strings. The whole file is read before the with block closes it: 40 items."},
+  "reorder.py:43": {"title": "Plan the orders", "text": "Hands the items to plan_orders(), which returns a dict mapping each supplier to its order lines."},
+  "reorder.py:33": {"title": "Start an empty order book", "text": "Keys will be supplier names, values lists of order lines; suppliers only appear once something is ordered from them."},
+  "reorder.py:34": {"title": "Check every product", "text": "One iteration per Item; the loop body asks needed() for a quantity and records it if it's non-zero. It ran 40 times, once per product in the file."},
+  "reorder.py:35": {"title": "Work out how much to order", "text": "Calls needed() for the current item; 0 means no order."},
+  "reorder.py:27": {"title": "Compute the stock to keep on hand", "text": "Target stock is a week of sales: daily_sales times SAFETY_DAYS. It's a float, since sales are averages."},
+  "reorder.py:28": {"title": "Compute the shortfall", "text": "How far stock on hand is below the target. Negative means there is more than enough."},
+  "reorder.py:29": {"title": "Round up to a sensible order", "text": "A conditional expression: no shortfall gives 0. Otherwise the shortfall is rounded and raised to at least MIN_ORDER. Note that round() uses banker's rounding, so a shortfall of 12.5 orders 12, not 13."},
+  "reorder.py:36": {"title": "Only record items that need ordering", "text": "0 is falsy, so items with enough stock are skipped without an explicit comparison."},
+  "reorder.py:37": {"title": "Add the order line under its supplier", "text": "setdefault returns the supplier's existing list, or inserts and returns a new empty one, so the first order for a supplier needs no special case."},
+  "reorder.py:38": {"title": "Return the order book", "text": "16 order lines across 3 suppliers: Acme 6, Borealis 8, Cobalt 2."},
+  "reorder.py:44": {"title": "Write the orders as JSON", "text": "Opening with \"w\" truncates any previous orders.json. In safe mode codestory redirected the file to its sandbox, so the real file was not touched."},
+  "reorder.py:45": {"title": "Serialise the order book", "text": "json.dump writes the dict straight to the file handle; indent=2 makes it readable for whoever places the orders."}
+ },
+ "notes": {
+  "s18": "First product, SKU-100: a week of sales is 38.5 units, and with 159 on hand the shortfall is -120.5, so nothing is ordered.",
+  "s23": "Of the 40 products, 16 needed reordering."
+ }
+}

@@ -1,7 +1,7 @@
 # Using codestory
 
-This page shows exactly how to invoke codestory, in both modes and with every option, in each kind of
-assistant. If you haven't installed it yet, see [Install](README.md#1-install) in the README.
+This page shows exactly how to invoke codestory, in both modes and both views, with every option, in each kind
+of assistant. If you haven't installed it yet, see [Install](README.md#1-install) in the README.
 
 ## Contents
 
@@ -15,7 +15,14 @@ assistant. If you haven't installed it yet, see [Install](README.md#1-install) i
 
 ## 1. How invocation works
 
-Three things explain everything else on this page.
+codestory has two **modes**, for what gets recorded, and two **views**, for how it's shown:
+
+| | **story** view (default): the story of the data, for anyone | **walkthrough** view: line by line, for programmers |
+|---|---|---|
+| **`scan`**: every possible path, nothing executed | The data's journey through the code, every branch shown as possible | Each statement in reading order, with where every name comes from and types where known |
+| **`run`**: one real run | What happened to the data on that run, with real row counts | A debugger-style replay of that run, with real values before and after every line |
+
+Three more things explain everything else on this page.
 
 **1. You invoke the skill with a chat message, not a terminal command.** A skill is instructions the assistant
 follows. You write a message, either the `/codestory` command or plain words, and the assistant runs
@@ -45,7 +52,7 @@ database access. So for `run`, you record the program yourself with one command 
 ## 2. The `/codestory` command
 
 ```
-/codestory [scan | run] <entry> [options] [-- program arguments]
+/codestory [scan | run] <entry> [--view story | walkthrough] [options] [-- program arguments]
 ```
 
 How to read it: `<entry>` is something you fill in and must give. Anything in `[square brackets]` is optional.
@@ -68,8 +75,11 @@ start (for example a required `--date`). That's a requirement of your program, n
 |---|---|---|---|---|
 | `<entry>` | **Required** | — | What to record. One of: a script (`main.py`, `jobs/nightly.py`); a module started with `python -m`, written `-m package.module`; or an existing `codestory_bundle.json` to turn into a story. | both |
 | `scan` or `run` | Optional | The assistant picks from your wording ("explain" → `scan`, "what happened" → `run`) and asks if it can't tell. With nothing to go on, it uses `scan`. | The mode. | |
-| `--audience TEXT` | Optional | A mixed audience: plain narration for non-programmers, with the code on every card for developers. | Who the story is for, for example `stakeholders`, `engineers`, `"new team members"`. Changes the narration. | both |
-| `--out FILE` | Optional | `story.html` | Name of the story file. | both |
+| `--view story` or `--view walkthrough` | Optional | `story`. The assistant picks `walkthrough` when you ask for line-by-line detail ("step through", "explain each line"). | Which view to produce. Must be chosen **when recording**, because a `run` walkthrough records line by line. | both |
+| `--focus TARGET` | Optional, walkthrough only | The whole program | Limit the walkthrough to files or functions, comma-separated: `etl/clean.py`, `clean`, or `etl.clean:clean`. Code outside the focus appears as one "call outside the focus" step. | both |
+| `--max-steps N` | Optional, walkthrough only | 150 | How many statements get a written explanation. The rest still show their measured facts. | both |
+| `--audience TEXT` | Optional | Story: a mixed audience. Walkthrough: programmers. | Who it's for, for example `stakeholders`, `engineers`, `"new team members"`. Changes the narration. | both |
+| `--out FILE` | Optional | `story.html`, or `walkthrough.html` | Name of the output file. | both |
 | `--root DIR` | Optional | The folder you're in, if it contains the entry; otherwise the entry's folder. For `-m`, the folder you're in. | The project's root folder. Needed only when imports don't resolve from those defaults, as in some monorepos. | both |
 | `--budget N` | Optional | 240,000 characters | Maximum characters of source code to include. Lower it for very large codebases or small chat limits. | both |
 | `--live` | Optional | **Safe mode is on**: writes go to a sandbox, database writes are captured, web posts and emails are blocked. | Turn safe mode off: everything really happens. | run |
@@ -109,7 +119,12 @@ default from the table above.
 | A very large codebase | `/codestory scan main.py --budget 120000` | "Explain main.py, but keep the bundle small." |
 | Choose the story file name | `/codestory run main.py --out nightly-2026-10-01.html -- --date 2026-10-01` | "...and save it as nightly-2026-10-01.html." |
 | Story from an existing bundle | `/codestory codestory_bundle.json` | "Turn codestory_bundle.json into a story." |
-| Everything at once | `/codestory run -m etl.cli --root . --budget 150000 --live --allow-subprocess --audience engineers --out etl.html -- --full-refresh` | |
+| Walk through the code, line by line | `/codestory scan main.py --view walkthrough` | "Walk me through main.py line by line." |
+| Replay a run, line by line | `/codestory run main.py --view walkthrough -- --date 2026-10-01` | "Step through what main.py did on 1 Oct, line by line." |
+| Only one function or file | `/codestory run main.py --view walkthrough --focus clean -- --date 2026-10-01` | "Step through clean() in that run." |
+| More or fewer written explanations | `/codestory scan main.py --view walkthrough --max-steps 40` | "Walk me through main.py, but only explain the 40 most important lines." |
+| Walkthrough from an existing bundle | `/codestory codestory_bundle.json --view walkthrough` | "Turn this bundle into a line-by-line walkthrough." (The bundle must have been recorded with `--view walkthrough`.) |
+| Everything at once | `/codestory run -m etl.cli --root . --budget 150000 --live --allow-subprocess --view walkthrough --focus etl/load.py --max-steps 60 --out etl.html -- --full-refresh` | |
 
 Combine options freely. Order among them doesn't matter, as long as your program's arguments come last,
 after `--`.
@@ -126,8 +141,12 @@ What happens after you send the command:
    > I'll run `python codestory.py run main.py -- --date 2026-10-01`. Safe mode is on: file writes go to a
    > temporary folder, database writes are captured instead of applied, and web posts and emails are blocked.
    > Reads really happen. OK to go ahead?
-3. It writes the storyboard, builds the story, and tells you where `story.html` is (or your `--out` name),
-   plus any warnings.
+3. It writes the storyboard (or, for a walkthrough, the explanations), builds the file, and tells you where it
+   is (`story.html`, `walkthrough.html`, or your `--out` name), plus any warnings.
+
+A walkthrough `run` records every line, so it takes longer than a normal run: about 2–3 times for programs that
+spend their time in libraries like pandas, up to about 10 times for tight pure-Python loops. Use `--focus` to
+record only the part you care about.
 4. Open the file in your browser.
 
 ### Claude Code
@@ -142,6 +161,7 @@ What happens after you send the command:
 /codestory scan main.py --audience stakeholders
 /codestory run main.py -- --date 2026-10-01
 /codestory run -m etl.cli --live -- --full-refresh
+/codestory run main.py --view walkthrough --focus clean -- --date 2026-10-01
 ```
 
 - **Approve**: when Claude Code asks permission to run the command, review it and approve.
@@ -160,6 +180,7 @@ What happens after you send the command:
 /codestory scan main.py
 /codestory run main.py --out today.html -- --date 2026-10-01
 /codestory run main.py --allow-subprocess -- --env staging
+/codestory scan main.py --view walkthrough
 ```
 
 - **Approve**: Copilot shows the terminal command with **Continue** (or **Allow**). Review it, then continue.
@@ -177,6 +198,7 @@ What happens after you send the command:
 $codestory scan main.py --audience "new team members"
 $codestory run main.py -- --date 2026-10-01
 $codestory run -m etl.cli --live -- --full-refresh
+$codestory run main.py --view walkthrough -- --date 2026-10-01
 ```
 
 - **Approve**: approve the command when Codex asks.
@@ -190,6 +212,7 @@ $codestory run -m etl.cli --live -- --full-refresh
 ```
 Use the codestory skill: scan main.py --audience engineers
 Use the codestory skill: run main.py -- --date 2026-10-01
+Use the codestory skill: scan main.py --view walkthrough --focus etl/clean.py
 ```
 
 ## 5. Chat assistants
@@ -199,8 +222,8 @@ Setup, once (only for the assistant you use):
 - **claude.ai**: turn on **Settings → Capabilities → Code execution and file creation**. Under **Skills** in
   the same settings, upload `codestory.skill` (from the repository's Releases page) and switch it on.
 - **ChatGPT**: if your plan has skills, add the folder there. Otherwise, create a **Project**: paste
-  `SKILL.md` into its instructions and upload `codestory.py`, `player.html`, `storyboard.schema.json` and the
-  two files in `references/` as project files.
+  `SKILL.md` into its instructions and upload `codestory.py`, `engine.js`, `player.html`, `walkthrough.html`,
+  `storyboard.schema.json`, `walkthrough.schema.json` and the three files in `references/` as project files.
 
 In chat assistants, `/codestory` is read as ordinary text, and that works: the skill recognizes it. Plain
 words work equally well.
@@ -213,13 +236,14 @@ scan.
 
 ```
 /codestory scan main.py
-/codestory scan main.py --audience stakeholders --out walkthrough.html
+/codestory scan main.py --audience stakeholders --out overview.html
 /codestory scan -m etl.cli
 /codestory scan services/billing/app.py --root services/billing --budget 120000
+/codestory scan main.py --view walkthrough --focus etl/clean.py
 ```
 
-The assistant scans the uploaded files, writes the story, and gives you `story.html` (or your `--out` name)
-to download. Your Python packages don't need to be installed for a scan.
+The assistant scans the uploaded files, writes the story or walkthrough, and gives you `story.html` or
+`walkthrough.html` (or your `--out` name) to download. Your Python packages don't need to be installed for a scan.
 
 ### run: record in your terminal, then upload
 
@@ -234,6 +258,8 @@ to download. Your Python packages don't need to be installed for a scan.
 | A module | `python codestory.py run -m etl.cli -- --full-refresh` |
 | Project root elsewhere | `python codestory.py run app.py --root services/billing` |
 | Smaller bundle | `python codestory.py run main.py --budget 120000` |
+| For a line-by-line walkthrough | `python codestory.py run main.py --view walkthrough -- --date 2026-10-01` |
+| Walkthrough of one function or file | `python codestory.py run main.py --view walkthrough --focus clean -- --date 2026-10-01` |
 
 Download `codestory.py` from the repository if you don't have it; it's one file and needs no installation.
 Use the path to wherever you saved it, for example `python ~/tools/codestory.py run main.py`.
@@ -250,23 +276,28 @@ optional here too:
 ```
 /codestory codestory_bundle.json
 /codestory codestory_bundle.json --audience stakeholders --out nightly-2026-10-01.html
+/codestory codestory_bundle.json --view walkthrough
 ```
 
-The story options (`--audience`, `--out`) go in the chat. Everything else was already decided in step 1.
+The output options (`--audience`, `--out`, and `--view` for which view to make from the bundle) go in the chat.
+Everything else was already decided in step 1. A bundle recorded with `--view walkthrough` can make either view;
+one recorded without it can only make a story.
 
 **Before uploading** (not optional), remember that the bundle contains source code and sample rows of your data. Check that
 you're allowed to share them with the assistant.
 
 ### Assistants that can't run code
 
-Some chat assistants can't execute Python at all. They give you `storyboard.json` instead of `story.html`.
-Turn it into a story yourself:
+Some chat assistants can't execute Python at all. They give you the document instead of the finished file. Build
+it yourself:
 
 ```bash
-python codestory.py build storyboard.json -o story.html
+python codestory.py build storyboard.json -o story.html                                            # story
+python codestory.py build walkthrough.json --bundle codestory_bundle.json -o walkthrough.html      # walkthrough
 ```
 
-Or open `player.html` in your browser and drag `storyboard.json` onto it.
+For a story, you can instead open `player.html` in your browser and drag `storyboard.json` onto it. A walkthrough
+always needs `build`, because it combines the explanations with the bundle.
 
 ## 6. Without an assistant
 
@@ -275,11 +306,15 @@ notation, `[...]` is optional and `<...>` is required; the entry (or `-m`) and, 
 file are the only required parts.
 
 ```bash
-python codestory.py scan  <script.py | -m module> [--root DIR] [--budget N] [-o bundle.json]
-python codestory.py run   <script.py | -m module> [--root DIR] [--budget N] [--live] [--allow-subprocess] [-o bundle.json] [-- program arguments]
+python codestory.py scan  <script.py | -m module> [--view story|walkthrough] [--focus T] [--max-steps N] [--root DIR] [--budget N] [-o bundle.json]
+python codestory.py run   <script.py | -m module> [--view story|walkthrough] [--focus T] [--max-steps N] [--root DIR] [--budget N] [--live] [--allow-subprocess] [-o bundle.json] [-- program arguments]
 python codestory.py build <storyboard.json> [-o story.html] [--force]
+python codestory.py build <walkthrough.json> --bundle <codestory_bundle.json> [-o walkthrough.html] [--force]
 python codestory.py --help
 ```
+
+`build` checks the document first and lists any problems, such as an explanation for a statement that isn't in the
+bundle. `--force` builds anyway; it's better to fix them.
 
 Note the two different spellings: in the terminal, `-o` names the **bundle** (for `scan` and `run`) or the
 **story** (for `build`). In the chat, `--out` always names the story.
@@ -307,5 +342,21 @@ pass that folder with `--root`.
 
 **Does a run ever happen without my approval?** In agents, no: `run` always shows the command and waits. In
 chat assistants, you run it yourself.
+
+**Story or walkthrough?** A story follows the data, scene by scene, for anyone: use it to explain a pipeline to a
+colleague, a manager or a new team member. A walkthrough follows the code, statement by statement, for
+programmers: use it to review, debug, or learn a codebase in detail. If you don't say, you get a story.
+
+**Why is a walkthrough run slower?** It records every line your code executes, with the variables each line
+changed. Expect about 2–3 times a normal run when the work happens inside libraries like pandas, up to about 10
+times for tight pure-Python loops. Use `--focus` to record only part of the program; the rest runs at nearly
+normal speed.
+
+**The walkthrough is too long.** Use `--focus` with a file or function. Long loops are already collapsed after
+their first iteration (you can expand them in the player), and only the `--max-steps` most important statements
+(150 by default) get written explanations.
+
+**I recorded without `--view walkthrough`. Can I still get a walkthrough?** No: that bundle has no line-by-line
+recording. Record again with `--view walkthrough`. The new bundle can make a story too.
 
 **What if I give an option the skill doesn't know?** The assistant asks what you meant instead of guessing.

@@ -1,19 +1,28 @@
 ---
 name: codestory
-description: Turns a Python script or codebase into an animated, shareable story (one HTML file) of how the code works - imports, settings, inputs, every data transformation, decisions and outputs. Use this whenever the user wants to visualize, animate, walk through, or explain how their code or pipeline works, show what happened in a particular run ("what did today's run do", "where did my rows go"), onboard someone onto a codebase, or explain code to a non-technical stakeholder. Also use it when the user types /codestory or uploads a codestory_bundle.json, even if they don't name the skill.
+description: Turns a Python script or codebase into an animated, shareable HTML file showing how the code works - either a story of the data for a mixed audience (imports, settings, inputs, every transformation, decisions, outputs), or a line-by-line code walkthrough for programmers with real values at every step. Use this whenever the user wants to visualize, animate, walk through, step through, or explain how their code or pipeline works, show what happened in a particular run ("what did today's run do", "where did my rows go", "which branch ran"), onboard someone onto a codebase, or explain code to a stakeholder or to engineers. Also use it when the user types /codestory or uploads a codestory_bundle.json, even if they don't name the skill.
 ---
 
 # codestory
 
 The scripts do the mechanical work: `codestory.py` records the program and builds the player. Your job is the
-part that needs judgment. You read a **bundle** (what the code is and, for a run, what it did) and write a
-**storyboard** (`storyboard.json`): an ordered set of scenes that a non-expert can follow. The quality of the
-story depends almost entirely on the storyboard.
+part that needs judgment. You read a **bundle** (what the code is and, for a run, what it did) and write one of
+two documents, depending on the **view**:
+
+- **Story** (default): a **storyboard** (`storyboard.json`), an ordered set of scenes about the data that a
+  non-expert can follow. Sections 3–6.
+- **Walkthrough**: a **walkthrough** (`walkthrough.json`), titles and technical explanations for the statements
+  of a line-by-line, debugger-style replay, for programmers. The tool decides the steps and measures every value;
+  you write the words. Section 7.
+
+The quality of the result depends almost entirely on what you write.
 
 Files in this skill folder:
 - `codestory.py` — `scan`, `run`, `build`. Python 3.8+, standard library only.
-- `player.html` — the player, with its own animation engine. `build` embeds the storyboard into it as one offline HTML file.
-- `storyboard.schema.json` — the exact format you must produce.
+- `player.html` (story) and `walkthrough.html` (walkthrough) — the players. `build` embeds your document, and
+  `engine.js`, into one offline HTML file.
+- `storyboard.schema.json`, `walkthrough.schema.json` — the exact formats you must produce.
+- `references/walkthrough-guide.md` — how to write a walkthrough. Read it whenever the view is `walkthrough`.
 - `references/bundle-format.md` — what every field in the bundle means. Read it the first time you use this skill.
 - `references/example-storyboard.json` — a complete, good storyboard for a real run. Look at it before writing your first one.
 
@@ -38,8 +47,11 @@ ask about it.
 | `--allow-subprocess` | Optional, run only | Off | Let the program start other programs. | `run --allow-subprocess` |
 | `--root DIR` | Optional | Omit; codestory picks the folder | The project root, when it isn't the current folder. | `--root DIR` |
 | `--budget N` | Optional | Omit (240,000) | Max characters of source code in the bundle. | `--budget N` |
-| `--audience TEXT` | Optional | A mixed audience | Who the story is for: `stakeholders`, `engineers`, `new team members`, or any description. | narration style (section 5) |
-| `--out FILE` | Optional | `story.html` | Name of the story file. | `build -o FILE` |
+| `--view story \| walkthrough` | Optional | `story` | Story of the data, or line-by-line code walkthrough. Must be chosen **before recording**. | `--view walkthrough` on `scan`/`run` |
+| `--focus TARGET` | Optional, walkthrough only | The whole program | Files or functions to cover, comma-separated: `etl/clean.py`, `clean`, `etl.clean:clean`. | `--focus TARGET` |
+| `--max-steps N` | Optional, walkthrough only | 150 | How many statements to explain in writing. | `--max-steps N` |
+| `--audience TEXT` | Optional | A mixed audience (story); programmers (walkthrough) | Who it's for: `stakeholders`, `engineers`, `new team members`, or any description. | narration style (sections 5, 7) |
+| `--out FILE` | Optional | `story.html`, or `walkthrough.html` | Name of the output file. | `build -o FILE` |
 | `-- ...` | Optional; needed only if their program requires arguments | No program arguments | Everything after a bare `--` belongs to the user's program, unchanged. | appended after `--` |
 
 Examples, and what you run:
@@ -50,11 +62,16 @@ Examples, and what you run:
 /codestory run main.py -- --date 2026-10-01          -> codestory.py run main.py -- --date 2026-10-01
 /codestory run -m etl.cli --live -- --full-refresh   -> codestory.py run -m etl.cli --live -- --full-refresh
 /codestory codestory_bundle.json --out today.html    -> no recording; storyboard, then build -o today.html
+/codestory scan main.py --view walkthrough           -> codestory.py scan main.py --view walkthrough
+/codestory run main.py --view walkthrough --focus clean -- --date 2026-10-01
+                                                     -> codestory.py run main.py --view walkthrough --focus clean -- --date 2026-10-01
 ```
 
 Users will just as often write plain language. Map it the same way: "explain", "walk through", "how does it work"
 mean `scan`; "what happened", "today's run", "with these arguments" mean `run`; "for real", "don't sandbox",
-"actually write the files" mean `--live`; "for my manager" sets the audience. Unknown options: ask, don't guess.
+"actually write the files" mean `--live`; "for my manager" sets the audience. "Line by line", "step through the
+code", "explain each line", "like a debugger", "what does each statement do" mean `--view walkthrough`; asking for
+programmers alone doesn't. Unknown options: ask, don't guess.
 Never add `--live` or `--allow-subprocess` on your own.
 
 ### What to work out
@@ -72,6 +89,9 @@ Work out these things from the request. Ask only for what you cannot infer, in o
   come out", "what did the job do this morning". The program is executed under the tracer.
 - If the message fits both, prefer `scan` and offer `run` in one sentence at the end.
 
+**View.** `story` unless they ask for line-by-line detail (above). A walkthrough of a large program is long:
+when there are more than about 300 statements in the plan, suggest `--focus` on the part they care about.
+
 **Program arguments** (run mode only). If the script needs arguments and they gave none, read its argument parser
 and ask for the values, or propose the ones from their README.
 
@@ -88,7 +108,7 @@ Pick the path that matches what you can do in this environment.
    instructions, and use that interpreter. The program's imports must resolve, so the system Python is usually wrong.
 2. `scan`: run it straight away. It reads files and executes nothing.
    ```bash
-   <python> <skill>/codestory.py scan <entry.py> -o codestory_bundle.json [--root DIR] [--budget N]
+   <python> <skill>/codestory.py scan <entry.py> -o codestory_bundle.json [--view walkthrough] [--focus T] [--max-steps N] [--root DIR] [--budget N]
    ```
    For a module, use `-m package.module` instead of the script path, from the folder they run `python -m` in.
 3. `run`: **ask before executing**, because it runs the user's program. Show the exact command and what safe mode
@@ -98,6 +118,8 @@ Pick the path that matches what you can do in this environment.
    > files, SELECT queries, GET requests) really happen. OK to go ahead?
 
    Only use `--live` if the user explicitly asks for real side effects. Only use `--allow-subprocess` if they agree.
+   For a walkthrough, add `--view walkthrough` (and `--focus`, `--max-steps` if given) and mention that line-by-line
+   recording makes the run slower: 2–10 times, most for tight pure-Python loops.
 4. Read what the command printed: outcome, intercepted side effects, any "REAL side effect" lines and warnings about
    libraries safe mode cannot intercept. You will repeat the important ones to the user at the end.
 
@@ -111,13 +133,21 @@ Pick the path that matches what you can do in this environment.
   ```bash
   python codestory.py run main.py -- <their usual arguments>
   ```
-  Put any options they asked for into that command (`--live`, `--allow-subprocess`, `--root`, `--budget`, `-m`),
-  because in this environment they are the one running it. Options about the story (`--audience`, `--out`) stay
-  with you. They need `codestory.py` from this skill; offer it as a download.
+  Put any options they asked for into that command (`--live`, `--allow-subprocess`, `--root`, `--budget`, `-m`,
+  and for a walkthrough `--view walkthrough`, `--focus`, `--max-steps`), because in this environment they are the
+  one running it. Options about the output (`--audience`, `--out`) stay with you. They need `codestory.py` from this skill; offer it as a download.
 
 ### C. No code execution at all
 
-Same as B for getting the bundle. At the end, give them `storyboard.json` and the build command (section 6).
+Same as B for getting the bundle. At the end, give them your document and the build command (section 6 or 7).
+
+### Check the bundle matches the view
+
+A bundle recorded with `--view walkthrough` has a `"view": "walkthrough"` field and a `plan`; it can produce either
+view. A bundle without them can only produce a story. If they want a walkthrough from a story bundle, it must be
+recorded again with `--view walkthrough`; say so.
+
+**If the view is `walkthrough`, skip sections 3–6 and go to section 7.**
 
 ## 3. Read the bundle
 
@@ -280,6 +310,33 @@ records sent. Use `delta` for a change versus the previous step. Skip stats in s
    (real side effects, libraries not intercepted, an error the run hit). In run mode, mention where safe mode put
    the sandboxed outputs (`run.sandbox`) in case they want to inspect them.
 
+## 7. Write a walkthrough
+
+Read `references/walkthrough-guide.md` first; it has the full rules and an example. In short:
+
+1. **Know what's yours.** The tool already decided the steps, their order, and every value, call, branch outcome
+   and name origin; the player shows all of that automatically. You write `walkthrough.json`
+   (`walkthrough.schema.json`): a `title`, a `subtitle`, the `entry`, and `explanations` keyed by **statement id**
+   (`"etl/clean.py:15"`), each with a `title` and a `text`.
+2. **Choose what to explain.** Work down `plan.explain_first` (already ranked: data changes, branches, calls,
+   I/O, exceptions first) and explain up to `plan.max_steps` statements. For a grouped step, explain its first
+   statement. Skip trivial statements unless they're surprising.
+3. **Write for programmers.** Title: sentence case, starts with a verb, at most 60 characters. Text: 1–4
+   sentences, at most 700 characters: what the statement does, how (the mechanism), and anything non-obvious
+   (in-place mutation, laziness, a performance trap, a bug risk). Don't restate the facts the player already
+   shows (where a name is defined, its type, the measured values) unless you're adding meaning to them.
+4. **Numbers must match the bundle.** One explanation covers every execution of a statement, so only quote values
+   from a statement that ran once, or describe the pattern. Use `notes` (keyed by step id) for remarks about one
+   particular execution.
+5. **Build and fix.** `build` checks every id against the bundle and stops on mistakes:
+   ```bash
+   python <skill>/codestory.py build walkthrough.json --bundle codestory_bundle.json -o walkthrough.html
+   ```
+   Fix every problem it lists; don't use `--force` to hide them. Its notes (for example "an explanation inside a
+   grouped step") are worth fixing too.
+6. **Deliver** `walkthrough.html` as in section 6. In environment C, give them `walkthrough.json` and that build
+   command; they need the bundle next to it.
+
 ## Limits to be honest about
 
 - `scan` misses functions called dynamically (registries, `getattr`, configuration-driven dispatch), although it
@@ -292,4 +349,6 @@ records sent. Use `delta` for a change versus the previous step. Skip stats in s
   `io.not_intercepted_libraries` and pass the warning on.
 - A read after a shadowed write to a server database doesn't see the shadowed rows. Look for `read-after-write`
   events, and if one exists, say the later numbers may differ from a live run.
+- Walkthrough recording follows the main thread only, records the first 3 executions of each line in each call,
+  and doesn't see in-place changes except in statements that visibly mutate a variable (`df.loc[...] = ...`).
 - Only Python is supported today.

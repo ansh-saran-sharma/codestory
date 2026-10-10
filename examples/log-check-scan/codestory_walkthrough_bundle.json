@@ -1,0 +1,2626 @@
+{
+ "schema": "codestory.bundle/2",
+ "tool_version": "0.2.0",
+ "mode": "scan",
+ "created": "2026-10-08T20:38:16+00:00",
+ "entry": "analyze_logs.py",
+ "entry_module": "analyze_logs",
+ "root": "project",
+ "python": "3.12.3",
+ "libraries": [
+  {
+   "name": "collections",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "email",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "json",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "re",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "smtplib",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  },
+  {
+   "name": "sys",
+   "kind": "stdlib",
+   "used_by": [
+    "analyze_logs"
+   ]
+  }
+ ],
+ "modules": {
+  "analyze_logs": {
+   "name": "analyze_logs",
+   "path": "analyze_logs.py",
+   "lines": 69,
+   "imports": [
+    {
+     "module": "json",
+     "names": [],
+     "alias": null,
+     "line": 2,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "re",
+     "names": [],
+     "alias": null,
+     "line": 3,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "smtplib",
+     "names": [],
+     "alias": null,
+     "line": 4,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "sys",
+     "names": [],
+     "alias": null,
+     "line": 5,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "collections",
+     "names": [
+      "Counter"
+     ],
+     "alias": null,
+     "line": 6,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "email.message",
+     "names": [
+      "EmailMessage"
+     ],
+     "alias": null,
+     "line": 7,
+     "kind": "stdlib",
+     "scope": "module"
+    }
+   ],
+   "constants": [
+    {
+     "name": "LOG_PATH",
+     "line": 9,
+     "value": "'logs/access.log'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "REPORT_PATH",
+     "line": 10,
+     "value": "'reports/errors.json'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "ERROR_RATE_ALERT",
+     "line": 11,
+     "value": "0.05",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "SMTP_HOST",
+     "line": 12,
+     "value": "'mail.internal'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "ONCALL",
+     "line": 13,
+     "value": "'oncall@example.com'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "LINE",
+     "line": 15,
+     "value": "re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')",
+     "how": "expression",
+     "upper": true
+    }
+   ],
+   "functions": {
+    "parse": {
+     "id": "analyze_logs:parse",
+     "name": "parse",
+     "qualname": "parse",
+     "line": 18,
+     "end": 25,
+     "args": [
+      "lines"
+     ],
+     "doc": "Turn raw log lines into dicts; skip lines that don't match.",
+     "calls": [
+      "LINE.search",
+      "m.groupdict",
+      "int"
+     ],
+     "branches": [
+      {
+       "line": 22,
+       "condition": "m",
+       "has_else": false,
+       "body_lines": [
+        23,
+        25
+       ]
+      }
+     ],
+     "loops": [
+      {
+       "line": 20,
+       "code": "for line in lines:"
+      }
+     ],
+     "calls_project": [],
+     "reach_depth": 1,
+     "source": "def parse(lines):\n    \"\"\"Turn raw log lines into dicts; skip lines that don't match.\"\"\"\n    for line in lines:\n        m = LINE.search(line)\n        if m:\n            d = m.groupdict()\n            d[\"status\"] = int(d[\"status\"])\n            yield d"
+    },
+    "endpoint": {
+     "id": "analyze_logs:endpoint",
+     "name": "endpoint",
+     "qualname": "endpoint",
+     "line": 28,
+     "end": 30,
+     "args": [
+      "path"
+     ],
+     "doc": "Collapse ids so /orders/123 and /orders/456 count together.",
+     "calls": [
+      "re.sub",
+      "path.split"
+     ],
+     "calls_project": [],
+     "reach_depth": 2,
+     "source": "def endpoint(path):\n    \"\"\"Collapse ids so /orders/123 and /orders/456 count together.\"\"\"\n    return re.sub(r\"/\\d+\", \"/:id\", path.split(\"?\")[0])"
+    },
+    "summarize": {
+     "id": "analyze_logs:summarize",
+     "name": "summarize",
+     "qualname": "summarize",
+     "line": 33,
+     "end": 41,
+     "args": [
+      "requests"
+     ],
+     "calls": [
+      "Counter",
+      "endpoint",
+      "round",
+      "total.most_common"
+     ],
+     "branches": [
+      {
+       "line": 38,
+       "condition": "r[\"status\"] >= 500",
+       "has_else": false,
+       "body_lines": [
+        39,
+        39
+       ]
+      }
+     ],
+     "loops": [
+      {
+       "line": 35,
+       "code": "for r in requests:"
+      }
+     ],
+     "calls_project": [
+      "analyze_logs:endpoint"
+     ],
+     "reach_depth": 1,
+     "source": "def summarize(requests):\n    total, errors = Counter(), Counter()\n    for r in requests:\n        ep = endpoint(r[\"path\"])\n        total[ep] += 1\n        if r[\"status\"] >= 500:\n            errors[ep] += 1\n    return [{\"endpoint\": ep, \"requests\": n, \"errors\": errors[ep], \"error_rate\": round(errors[ep] / n, 4)}\n            for ep, n in total.most_common()]"
+    },
+    "send_alert": {
+     "id": "analyze_logs:send_alert",
+     "name": "send_alert",
+     "qualname": "send_alert",
+     "line": 44,
+     "end": 52,
+     "args": [
+      "rows",
+      "rate"
+     ],
+     "calls": [
+      "EmailMessage",
+      "sorted",
+      "msg.set_content",
+      "smtplib.SMTP",
+      "s.send_message"
+     ],
+     "io": [
+      {
+       "line": 52,
+       "call": "s.send_message",
+       "direction": "write",
+       "kind": "email",
+       "target": "msg"
+      }
+     ],
+     "calls_project": [],
+     "reach_depth": 1,
+     "source": "def send_alert(rows, rate):\n    msg = EmailMessage()\n    msg[\"Subject\"] = f\"Error rate {rate:.1%} in last night's traffic\"\n    msg[\"To\"] = ONCALL\n    msg[\"From\"] = \"logbot@example.com\"\n    worst = sorted(rows, key=lambda r: r[\"errors\"], reverse=True)[:5]\n    msg.set_content(\"\\n\".join(f'{r[\"endpoint\"]}: {r[\"errors\"]} errors' for r in worst))\n    with smtplib.SMTP(SMTP_HOST) as s:\n        s.send_message(msg)"
+    },
+    "main": {
+     "id": "analyze_logs:main",
+     "name": "main",
+     "qualname": "main",
+     "line": 55,
+     "end": 65,
+     "args": [
+      "path"
+     ],
+     "calls": [
+      "open",
+      "summarize",
+      "parse",
+      "json.dump",
+      "sum",
+      "send_alert"
+     ],
+     "io": [
+      {
+       "line": 56,
+       "call": "open",
+       "direction": "read",
+       "kind": "file",
+       "target": "path"
+      },
+      {
+       "line": 58,
+       "call": "open",
+       "direction": "write",
+       "kind": "file",
+       "target": "REPORT_PATH"
+      },
+      {
+       "line": 59,
+       "call": "json.dump",
+       "direction": "write",
+       "kind": "file",
+       "target": "out"
+      }
+     ],
+     "branches": [
+      {
+       "line": 63,
+       "condition": "rate > ERROR_RATE_ALERT",
+       "has_else": false,
+       "body_lines": [
+        64,
+        64
+       ]
+      }
+     ],
+     "calls_project": [
+      "analyze_logs:parse",
+      "analyze_logs:send_alert",
+      "analyze_logs:summarize"
+     ],
+     "reach_depth": 0,
+     "source": "def main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate"
+    }
+   },
+   "classes": {},
+   "main_flow": [
+    {
+     "line": 1,
+     "kind": "expr",
+     "code": "\"\"\"Nightly check of web server logs: error rates per endpoint, with an email if things look bad.\"\"\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 9,
+     "kind": "assign",
+     "code": "LOG_PATH = \"logs/access.log\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 10,
+     "kind": "assign",
+     "code": "REPORT_PATH = \"reports/errors.json\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 11,
+     "kind": "assign",
+     "code": "ERROR_RATE_ALERT = 0.05",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 12,
+     "kind": "assign",
+     "code": "SMTP_HOST = \"mail.internal\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 13,
+     "kind": "assign",
+     "code": "ONCALL = \"oncall@example.com\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 15,
+     "kind": "assign",
+     "code": "LINE = re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')",
+     "calls": [
+      "re.compile"
+     ],
+     "calls_project": []
+    },
+    {
+     "line": 68,
+     "kind": "main_guard",
+     "code": "if __name__ == \"__main__\":",
+     "calls": [
+      "main"
+     ],
+     "branches": [
+      {
+       "line": 68,
+       "condition": "__name__ == \"__main__\"",
+       "has_else": false,
+       "body_lines": [
+        69,
+        69
+       ]
+      }
+     ],
+     "body": [
+      {
+       "line": 69,
+       "code": "main(*sys.argv[1:])",
+       "calls": [
+        "main"
+       ],
+       "calls_project": [
+        "analyze_logs:main"
+       ]
+      }
+     ],
+     "calls_project": [
+      "analyze_logs:main"
+     ]
+    }
+   ],
+   "module_code": "1: \"\"\"Nightly check of web server logs: error rates per endpoint, with an email if things look bad.\"\"\"\n2: import json\n3: import re\n4: import smtplib\n5: import sys\n6: from collections import Counter\n7: from email.message import EmailMessage\n9: LOG_PATH = \"logs/access.log\"\n10: REPORT_PATH = \"reports/errors.json\"\n11: ERROR_RATE_ALERT = 0.05          # alert when more than 5% of requests fail\n12: SMTP_HOST = \"mail.internal\"\n13: ONCALL = \"oncall@example.com\"\n15: LINE = re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')\n68: if __name__ == \"__main__\":\n69:     main(*sys.argv[1:])"
+  }
+ },
+ "unreached_functions": [],
+ "notes": [
+  "Static scan: nothing was executed. Order follows the source; branches are possibilities.",
+  "Functions called dynamically (getattr, registries, config-driven dispatch) may be missing."
+ ],
+ "budget": {
+  "chars_used": 2159,
+  "functions_trimmed": 0
+ },
+ "view": "walkthrough",
+ "focus": "whole program",
+ "sources": {
+  "analyze_logs.py": "\"\"\"Nightly check of web server logs: error rates per endpoint, with an email if things look bad.\"\"\"\nimport json\nimport re\nimport smtplib\nimport sys\nfrom collections import Counter\nfrom email.message import EmailMessage\n\nLOG_PATH = \"logs/access.log\"\nREPORT_PATH = \"reports/errors.json\"\nERROR_RATE_ALERT = 0.05          # alert when more than 5% of requests fail\nSMTP_HOST = \"mail.internal\"\nONCALL = \"oncall@example.com\"\n\nLINE = re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')\n\n\ndef parse(lines):\n    \"\"\"Turn raw log lines into dicts; skip lines that don't match.\"\"\"\n    for line in lines:\n        m = LINE.search(line)\n        if m:\n            d = m.groupdict()\n            d[\"status\"] = int(d[\"status\"])\n            yield d\n\n\ndef endpoint(path):\n    \"\"\"Collapse ids so /orders/123 and /orders/456 count together.\"\"\"\n    return re.sub(r\"/\\d+\", \"/:id\", path.split(\"?\")[0])\n\n\ndef summarize(requests):\n    total, errors = Counter(), Counter()\n    for r in requests:\n        ep = endpoint(r[\"path\"])\n        total[ep] += 1\n        if r[\"status\"] >= 500:\n            errors[ep] += 1\n    return [{\"endpoint\": ep, \"requests\": n, \"errors\": errors[ep], \"error_rate\": round(errors[ep] / n, 4)}\n            for ep, n in total.most_common()]\n\n\ndef send_alert(rows, rate):\n    msg = EmailMessage()\n    msg[\"Subject\"] = f\"Error rate {rate:.1%} in last night's traffic\"\n    msg[\"To\"] = ONCALL\n    msg[\"From\"] = \"logbot@example.com\"\n    worst = sorted(rows, key=lambda r: r[\"errors\"], reverse=True)[:5]\n    msg.set_content(\"\\n\".join(f'{r[\"endpoint\"]}: {r[\"errors\"]} errors' for r in worst))\n    with smtplib.SMTP(SMTP_HOST) as s:\n        s.send_message(msg)\n\n\ndef main(path=LOG_PATH):\n    with open(path) as fh:\n        rows = summarize(parse(fh))\n    with open(REPORT_PATH, \"w\") as out:\n        json.dump(rows, out, indent=2)\n    total = sum(r[\"requests\"] for r in rows)\n    errors = sum(r[\"errors\"] for r in rows)\n    rate = errors / total if total else 0\n    if rate > ERROR_RATE_ALERT:\n        send_alert(rows, rate)\n    return rate\n\n\nif __name__ == \"__main__\":\n    main(*sys.argv[1:])"
+ },
+ "statements": {
+  "analyze_logs.py:2": {
+   "id": "analyze_logs.py:2",
+   "file": "analyze_logs.py",
+   "line": 2,
+   "end": 2,
+   "full_end": 2,
+   "kind": "import",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "json"
+   ],
+   "names": {
+    "json": {
+     "kind": "import_stdlib",
+     "from": "json",
+     "package": "json"
+    }
+   },
+   "group": "import"
+  },
+  "analyze_logs.py:3": {
+   "id": "analyze_logs.py:3",
+   "file": "analyze_logs.py",
+   "line": 3,
+   "end": 3,
+   "full_end": 3,
+   "kind": "import",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "re"
+   ],
+   "names": {
+    "re": {
+     "kind": "import_stdlib",
+     "from": "re",
+     "package": "re"
+    }
+   },
+   "group": "import"
+  },
+  "analyze_logs.py:4": {
+   "id": "analyze_logs.py:4",
+   "file": "analyze_logs.py",
+   "line": 4,
+   "end": 4,
+   "full_end": 4,
+   "kind": "import",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "smtplib"
+   ],
+   "names": {
+    "smtplib": {
+     "kind": "import_stdlib",
+     "from": "smtplib",
+     "package": "smtplib"
+    }
+   },
+   "group": "import"
+  },
+  "analyze_logs.py:5": {
+   "id": "analyze_logs.py:5",
+   "file": "analyze_logs.py",
+   "line": 5,
+   "end": 5,
+   "full_end": 5,
+   "kind": "import",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "sys"
+   ],
+   "names": {
+    "sys": {
+     "kind": "import_stdlib",
+     "from": "sys",
+     "package": "sys"
+    }
+   },
+   "group": "import"
+  },
+  "analyze_logs.py:6": {
+   "id": "analyze_logs.py:6",
+   "file": "analyze_logs.py",
+   "line": 6,
+   "end": 6,
+   "full_end": 6,
+   "kind": "import",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "Counter"
+   ],
+   "names": {
+    "Counter": {
+     "kind": "import_stdlib",
+     "from": "collections.Counter",
+     "package": "collections"
+    }
+   },
+   "group": "import"
+  },
+  "analyze_logs.py:7": {
+   "id": "analyze_logs.py:7",
+   "file": "analyze_logs.py",
+   "line": 7,
+   "end": 7,
+   "full_end": 7,
+   "kind": "import",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "EmailMessage"
+   ],
+   "names": {
+    "EmailMessage": {
+     "kind": "import_stdlib",
+     "from": "email.message.EmailMessage",
+     "package": "email"
+    }
+   },
+   "group": "import"
+  },
+  "analyze_logs.py:9": {
+   "id": "analyze_logs.py:9",
+   "file": "analyze_logs.py",
+   "line": 9,
+   "end": 9,
+   "full_end": 9,
+   "kind": "constant",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "LOG_PATH"
+   ],
+   "names": {
+    "LOG_PATH": {
+     "kind": "constant",
+     "where": "analyze_logs.py:9",
+     "value": "'logs/access.log'"
+    }
+   },
+   "value": "'logs/access.log'",
+   "group": "constant"
+  },
+  "analyze_logs.py:10": {
+   "id": "analyze_logs.py:10",
+   "file": "analyze_logs.py",
+   "line": 10,
+   "end": 10,
+   "full_end": 10,
+   "kind": "constant",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "REPORT_PATH"
+   ],
+   "names": {
+    "REPORT_PATH": {
+     "kind": "constant",
+     "where": "analyze_logs.py:10",
+     "value": "'reports/errors.json'"
+    }
+   },
+   "value": "'reports/errors.json'",
+   "group": "constant"
+  },
+  "analyze_logs.py:11": {
+   "id": "analyze_logs.py:11",
+   "file": "analyze_logs.py",
+   "line": 11,
+   "end": 11,
+   "full_end": 11,
+   "kind": "constant",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "ERROR_RATE_ALERT"
+   ],
+   "names": {
+    "ERROR_RATE_ALERT": {
+     "kind": "constant",
+     "where": "analyze_logs.py:11",
+     "value": "0.05"
+    }
+   },
+   "value": "0.05",
+   "comments": [
+    "alert when more than 5% of requests fail"
+   ],
+   "group": "constant"
+  },
+  "analyze_logs.py:12": {
+   "id": "analyze_logs.py:12",
+   "file": "analyze_logs.py",
+   "line": 12,
+   "end": 12,
+   "full_end": 12,
+   "kind": "constant",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "SMTP_HOST"
+   ],
+   "names": {
+    "SMTP_HOST": {
+     "kind": "constant",
+     "where": "analyze_logs.py:12",
+     "value": "'mail.internal'"
+    }
+   },
+   "value": "'mail.internal'",
+   "group": "constant"
+  },
+  "analyze_logs.py:13": {
+   "id": "analyze_logs.py:13",
+   "file": "analyze_logs.py",
+   "line": 13,
+   "end": 13,
+   "full_end": 13,
+   "kind": "constant",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "ONCALL"
+   ],
+   "names": {
+    "ONCALL": {
+     "kind": "constant",
+     "where": "analyze_logs.py:13",
+     "value": "'oncall@example.com'"
+    }
+   },
+   "value": "'oncall@example.com'",
+   "group": "constant"
+  },
+  "analyze_logs.py:15": {
+   "id": "analyze_logs.py:15",
+   "file": "analyze_logs.py",
+   "line": 15,
+   "end": 15,
+   "full_end": 15,
+   "kind": "assign",
+   "scope": "analyze_logs:<module>",
+   "reads": [
+    "re"
+   ],
+   "writes": [
+    "LINE"
+   ],
+   "names": {
+    "re": {
+     "kind": "import_stdlib",
+     "from": "re",
+     "package": "re"
+    },
+    "LINE": {
+     "kind": "constant",
+     "where": "analyze_logs.py:15",
+     "value": "re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')"
+    }
+   },
+   "calls": [
+    {
+     "call": "re.compile",
+     "origin": "stdlib",
+     "package": "re",
+     "qualified": "re.compile"
+    }
+   ]
+  },
+  "analyze_logs.py:18": {
+   "id": "analyze_logs.py:18",
+   "file": "analyze_logs.py",
+   "line": 18,
+   "end": 18,
+   "full_end": 25,
+   "kind": "def",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "parse"
+   ],
+   "names": {
+    "parse": {
+     "kind": "function",
+     "where": "analyze_logs.py:18",
+     "id": "analyze_logs:parse"
+    }
+   },
+   "defines": "analyze_logs:parse",
+   "doc": "Turn raw log lines into dicts; skip lines that don't match.",
+   "generator": true,
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "analyze_logs.py:20"
+    ]
+   }
+  },
+  "analyze_logs.py:20": {
+   "id": "analyze_logs.py:20",
+   "file": "analyze_logs.py",
+   "line": 20,
+   "end": 20,
+   "full_end": 25,
+   "kind": "for",
+   "scope": "analyze_logs:parse",
+   "parent": "analyze_logs.py:18",
+   "block": "body",
+   "reads": [
+    "lines"
+   ],
+   "writes": [
+    "line"
+   ],
+   "names": {
+    "lines": {
+     "kind": "parameter"
+    },
+    "line": {
+     "kind": "local"
+    }
+   },
+   "blocks": {
+    "body": [
+     "analyze_logs.py:21",
+     "analyze_logs.py:22"
+    ]
+   }
+  },
+  "analyze_logs.py:21": {
+   "id": "analyze_logs.py:21",
+   "file": "analyze_logs.py",
+   "line": 21,
+   "end": 21,
+   "full_end": 21,
+   "kind": "assign",
+   "scope": "analyze_logs:parse",
+   "parent": "analyze_logs.py:20",
+   "block": "body",
+   "reads": [
+    "line",
+    "LINE"
+   ],
+   "writes": [
+    "m"
+   ],
+   "names": {
+    "line": {
+     "kind": "local"
+    },
+    "LINE": {
+     "kind": "constant",
+     "where": "analyze_logs.py:15",
+     "value": "re.compile(r'(?P<ip>\\S+) .* \"(?P<method>\\w+) (?P<path>\\S+) [^\"]*\" (?P<status>\\d{3}) (?P<bytes>\\d+)')"
+    },
+    "m": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "LINE.search",
+     "origin": "method",
+     "on": "LINE"
+    }
+   ]
+  },
+  "analyze_logs.py:22": {
+   "id": "analyze_logs.py:22",
+   "file": "analyze_logs.py",
+   "line": 22,
+   "end": 22,
+   "full_end": 25,
+   "kind": "if",
+   "scope": "analyze_logs:parse",
+   "parent": "analyze_logs.py:20",
+   "block": "body",
+   "reads": [
+    "m"
+   ],
+   "names": {
+    "m": {
+     "kind": "local"
+    }
+   },
+   "blocks": {
+    "body": [
+     "analyze_logs.py:23",
+     "analyze_logs.py:24",
+     "analyze_logs.py:25"
+    ]
+   }
+  },
+  "analyze_logs.py:23": {
+   "id": "analyze_logs.py:23",
+   "file": "analyze_logs.py",
+   "line": 23,
+   "end": 23,
+   "full_end": 23,
+   "kind": "assign",
+   "scope": "analyze_logs:parse",
+   "parent": "analyze_logs.py:22",
+   "block": "body",
+   "reads": [
+    "m"
+   ],
+   "writes": [
+    "d"
+   ],
+   "names": {
+    "m": {
+     "kind": "local"
+    },
+    "d": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "m.groupdict",
+     "origin": "method",
+     "on": "m"
+    }
+   ]
+  },
+  "analyze_logs.py:24": {
+   "id": "analyze_logs.py:24",
+   "file": "analyze_logs.py",
+   "line": 24,
+   "end": 24,
+   "full_end": 24,
+   "kind": "assign",
+   "scope": "analyze_logs:parse",
+   "parent": "analyze_logs.py:22",
+   "block": "body",
+   "reads": [
+    "d",
+    "int"
+   ],
+   "mutates": [
+    "d"
+   ],
+   "names": {
+    "d": {
+     "kind": "local"
+    },
+    "int": {
+     "kind": "builtin"
+    }
+   },
+   "calls": [
+    {
+     "call": "int",
+     "origin": "builtin"
+    }
+   ]
+  },
+  "analyze_logs.py:25": {
+   "id": "analyze_logs.py:25",
+   "file": "analyze_logs.py",
+   "line": 25,
+   "end": 25,
+   "full_end": 25,
+   "kind": "yield",
+   "scope": "analyze_logs:parse",
+   "parent": "analyze_logs.py:22",
+   "block": "body",
+   "reads": [
+    "d"
+   ],
+   "names": {
+    "d": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:28": {
+   "id": "analyze_logs.py:28",
+   "file": "analyze_logs.py",
+   "line": 28,
+   "end": 28,
+   "full_end": 30,
+   "kind": "def",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "endpoint"
+   ],
+   "names": {
+    "endpoint": {
+     "kind": "function",
+     "where": "analyze_logs.py:28",
+     "id": "analyze_logs:endpoint"
+    }
+   },
+   "defines": "analyze_logs:endpoint",
+   "doc": "Collapse ids so /orders/123 and /orders/456 count together.",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "analyze_logs.py:30"
+    ]
+   }
+  },
+  "analyze_logs.py:30": {
+   "id": "analyze_logs.py:30",
+   "file": "analyze_logs.py",
+   "line": 30,
+   "end": 30,
+   "full_end": 30,
+   "kind": "return",
+   "scope": "analyze_logs:endpoint",
+   "parent": "analyze_logs.py:28",
+   "block": "body",
+   "reads": [
+    "re",
+    "path"
+   ],
+   "names": {
+    "re": {
+     "kind": "import_stdlib",
+     "from": "re",
+     "package": "re"
+    },
+    "path": {
+     "kind": "parameter"
+    }
+   },
+   "calls": [
+    {
+     "call": "path.split",
+     "origin": "method",
+     "on": "path"
+    },
+    {
+     "call": "re.sub",
+     "origin": "stdlib",
+     "package": "re",
+     "qualified": "re.sub"
+    }
+   ]
+  },
+  "analyze_logs.py:33": {
+   "id": "analyze_logs.py:33",
+   "file": "analyze_logs.py",
+   "line": 33,
+   "end": 33,
+   "full_end": 41,
+   "kind": "def",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "summarize"
+   ],
+   "names": {
+    "summarize": {
+     "kind": "function",
+     "where": "analyze_logs.py:33",
+     "id": "analyze_logs:summarize"
+    }
+   },
+   "defines": "analyze_logs:summarize",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "analyze_logs.py:34",
+     "analyze_logs.py:35",
+     "analyze_logs.py:40"
+    ]
+   }
+  },
+  "analyze_logs.py:34": {
+   "id": "analyze_logs.py:34",
+   "file": "analyze_logs.py",
+   "line": 34,
+   "end": 34,
+   "full_end": 34,
+   "kind": "assign",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:33",
+   "block": "body",
+   "reads": [
+    "Counter"
+   ],
+   "writes": [
+    "total",
+    "errors"
+   ],
+   "names": {
+    "Counter": {
+     "kind": "import_stdlib",
+     "from": "collections.Counter",
+     "package": "collections"
+    },
+    "total": {
+     "kind": "local"
+    },
+    "errors": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "Counter",
+     "origin": "stdlib",
+     "package": "collections",
+     "qualified": "collections.Counter"
+    }
+   ]
+  },
+  "analyze_logs.py:35": {
+   "id": "analyze_logs.py:35",
+   "file": "analyze_logs.py",
+   "line": 35,
+   "end": 35,
+   "full_end": 39,
+   "kind": "for",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:33",
+   "block": "body",
+   "reads": [
+    "requests"
+   ],
+   "writes": [
+    "r"
+   ],
+   "names": {
+    "requests": {
+     "kind": "parameter"
+    },
+    "r": {
+     "kind": "local"
+    }
+   },
+   "blocks": {
+    "body": [
+     "analyze_logs.py:36",
+     "analyze_logs.py:37",
+     "analyze_logs.py:38"
+    ]
+   }
+  },
+  "analyze_logs.py:36": {
+   "id": "analyze_logs.py:36",
+   "file": "analyze_logs.py",
+   "line": 36,
+   "end": 36,
+   "full_end": 36,
+   "kind": "assign",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:35",
+   "block": "body",
+   "reads": [
+    "endpoint",
+    "r"
+   ],
+   "writes": [
+    "ep"
+   ],
+   "names": {
+    "endpoint": {
+     "kind": "function",
+     "where": "analyze_logs.py:28",
+     "id": "analyze_logs:endpoint"
+    },
+    "r": {
+     "kind": "local"
+    },
+    "ep": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "endpoint",
+     "origin": "project",
+     "id": "analyze_logs:endpoint",
+     "where": "analyze_logs.py:28"
+    }
+   ]
+  },
+  "analyze_logs.py:37": {
+   "id": "analyze_logs.py:37",
+   "file": "analyze_logs.py",
+   "line": 37,
+   "end": 37,
+   "full_end": 37,
+   "kind": "assign",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:35",
+   "block": "body",
+   "reads": [
+    "total",
+    "ep"
+   ],
+   "mutates": [
+    "total"
+   ],
+   "names": {
+    "total": {
+     "kind": "local"
+    },
+    "ep": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:38": {
+   "id": "analyze_logs.py:38",
+   "file": "analyze_logs.py",
+   "line": 38,
+   "end": 38,
+   "full_end": 39,
+   "kind": "if",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:35",
+   "block": "body",
+   "reads": [
+    "r"
+   ],
+   "names": {
+    "r": {
+     "kind": "local"
+    }
+   },
+   "blocks": {
+    "body": [
+     "analyze_logs.py:39"
+    ]
+   }
+  },
+  "analyze_logs.py:39": {
+   "id": "analyze_logs.py:39",
+   "file": "analyze_logs.py",
+   "line": 39,
+   "end": 39,
+   "full_end": 39,
+   "kind": "assign",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:38",
+   "block": "body",
+   "reads": [
+    "errors",
+    "ep"
+   ],
+   "mutates": [
+    "errors"
+   ],
+   "names": {
+    "errors": {
+     "kind": "local"
+    },
+    "ep": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:40": {
+   "id": "analyze_logs.py:40",
+   "file": "analyze_logs.py",
+   "line": 40,
+   "end": 41,
+   "full_end": 41,
+   "kind": "return",
+   "scope": "analyze_logs:summarize",
+   "parent": "analyze_logs.py:33",
+   "block": "body",
+   "reads": [
+    "errors",
+    "round",
+    "total"
+   ],
+   "names": {
+    "errors": {
+     "kind": "local"
+    },
+    "round": {
+     "kind": "builtin"
+    },
+    "total": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "round",
+     "origin": "builtin"
+    },
+    {
+     "call": "total.most_common",
+     "origin": "method",
+     "on": "total"
+    }
+   ]
+  },
+  "analyze_logs.py:44": {
+   "id": "analyze_logs.py:44",
+   "file": "analyze_logs.py",
+   "line": 44,
+   "end": 44,
+   "full_end": 52,
+   "kind": "def",
+   "scope": "analyze_logs:<module>",
+   "writes": [
+    "send_alert"
+   ],
+   "names": {
+    "send_alert": {
+     "kind": "function",
+     "where": "analyze_logs.py:44",
+     "id": "analyze_logs:send_alert"
+    }
+   },
+   "defines": "analyze_logs:send_alert",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "analyze_logs.py:45",
+     "analyze_logs.py:46",
+     "analyze_logs.py:47",
+     "analyze_logs.py:48",
+     "analyze_logs.py:49",
+     "analyze_logs.py:50",
+     "analyze_logs.py:51"
+    ]
+   }
+  },
+  "analyze_logs.py:45": {
+   "id": "analyze_logs.py:45",
+   "file": "analyze_logs.py",
+   "line": 45,
+   "end": 45,
+   "full_end": 45,
+   "kind": "assign",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "EmailMessage"
+   ],
+   "writes": [
+    "msg"
+   ],
+   "names": {
+    "EmailMessage": {
+     "kind": "import_stdlib",
+     "from": "email.message.EmailMessage",
+     "package": "email"
+    },
+    "msg": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "EmailMessage",
+     "origin": "stdlib",
+     "package": "email",
+     "qualified": "email.message.EmailMessage"
+    }
+   ]
+  },
+  "analyze_logs.py:46": {
+   "id": "analyze_logs.py:46",
+   "file": "analyze_logs.py",
+   "line": 46,
+   "end": 46,
+   "full_end": 46,
+   "kind": "assign",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "msg",
+    "rate"
+   ],
+   "mutates": [
+    "msg"
+   ],
+   "names": {
+    "msg": {
+     "kind": "local"
+    },
+    "rate": {
+     "kind": "parameter"
+    }
+   }
+  },
+  "analyze_logs.py:47": {
+   "id": "analyze_logs.py:47",
+   "file": "analyze_logs.py",
+   "line": 47,
+   "end": 47,
+   "full_end": 47,
+   "kind": "assign",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "ONCALL",
+    "msg"
+   ],
+   "mutates": [
+    "msg"
+   ],
+   "names": {
+    "ONCALL": {
+     "kind": "constant",
+     "where": "analyze_logs.py:13",
+     "value": "'oncall@example.com'"
+    },
+    "msg": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:48": {
+   "id": "analyze_logs.py:48",
+   "file": "analyze_logs.py",
+   "line": 48,
+   "end": 48,
+   "full_end": 48,
+   "kind": "assign",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "msg"
+   ],
+   "mutates": [
+    "msg"
+   ],
+   "names": {
+    "msg": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:49": {
+   "id": "analyze_logs.py:49",
+   "file": "analyze_logs.py",
+   "line": 49,
+   "end": 49,
+   "full_end": 49,
+   "kind": "assign",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "sorted",
+    "rows",
+    "r"
+   ],
+   "writes": [
+    "worst"
+   ],
+   "names": {
+    "sorted": {
+     "kind": "builtin"
+    },
+    "rows": {
+     "kind": "parameter"
+    },
+    "r": {
+     "kind": "local"
+    },
+    "worst": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "sorted",
+     "origin": "builtin"
+    }
+   ]
+  },
+  "analyze_logs.py:50": {
+   "id": "analyze_logs.py:50",
+   "file": "analyze_logs.py",
+   "line": 50,
+   "end": 50,
+   "full_end": 50,
+   "kind": "call",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "msg",
+    "worst"
+   ],
+   "names": {
+    "msg": {
+     "kind": "local"
+    },
+    "worst": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "msg.set_content",
+     "origin": "method",
+     "on": "msg"
+    }
+   ]
+  },
+  "analyze_logs.py:51": {
+   "id": "analyze_logs.py:51",
+   "file": "analyze_logs.py",
+   "line": 51,
+   "end": 51,
+   "full_end": 52,
+   "kind": "with",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:44",
+   "block": "body",
+   "reads": [
+    "SMTP_HOST",
+    "smtplib"
+   ],
+   "writes": [
+    "s"
+   ],
+   "names": {
+    "SMTP_HOST": {
+     "kind": "constant",
+     "where": "analyze_logs.py:12",
+     "value": "'mail.internal'"
+    },
+    "smtplib": {
+     "kind": "import_stdlib",
+     "from": "smtplib",
+     "package": "smtplib"
+    },
+    "s": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "smtplib.SMTP",
+     "origin": "stdlib",
+     "package": "smtplib",
+     "qualified": "smtplib.SMTP"
+    }
+   ],
+   "blocks": {
+    "body": [
+     "analyze_logs.py:52"
+    ]
+   }
+  },
+  "analyze_logs.py:52": {
+   "id": "analyze_logs.py:52",
+   "file": "analyze_logs.py",
+   "line": 52,
+   "end": 52,
+   "full_end": 52,
+   "kind": "call",
+   "scope": "analyze_logs:send_alert",
+   "parent": "analyze_logs.py:51",
+   "block": "body",
+   "reads": [
+    "msg",
+    "s"
+   ],
+   "names": {
+    "msg": {
+     "kind": "local"
+    },
+    "s": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "s.send_message",
+     "origin": "method",
+     "on": "s"
+    }
+   ],
+   "io": [
+    {
+     "line": 52,
+     "call": "s.send_message",
+     "direction": "write",
+     "kind": "email",
+     "target": "msg"
+    }
+   ]
+  },
+  "analyze_logs.py:55": {
+   "id": "analyze_logs.py:55",
+   "file": "analyze_logs.py",
+   "line": 55,
+   "end": 55,
+   "full_end": 65,
+   "kind": "def",
+   "scope": "analyze_logs:<module>",
+   "reads": [
+    "LOG_PATH"
+   ],
+   "writes": [
+    "main"
+   ],
+   "names": {
+    "LOG_PATH": {
+     "kind": "constant",
+     "where": "analyze_logs.py:9",
+     "value": "'logs/access.log'"
+    },
+    "main": {
+     "kind": "function",
+     "where": "analyze_logs.py:55",
+     "id": "analyze_logs:main"
+    }
+   },
+   "defines": "analyze_logs:main",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "analyze_logs.py:56",
+     "analyze_logs.py:58",
+     "analyze_logs.py:60",
+     "analyze_logs.py:61",
+     "analyze_logs.py:62",
+     "analyze_logs.py:63",
+     "analyze_logs.py:65"
+    ]
+   }
+  },
+  "analyze_logs.py:56": {
+   "id": "analyze_logs.py:56",
+   "file": "analyze_logs.py",
+   "line": 56,
+   "end": 56,
+   "full_end": 57,
+   "kind": "with",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "open",
+    "path"
+   ],
+   "writes": [
+    "fh"
+   ],
+   "names": {
+    "open": {
+     "kind": "builtin"
+    },
+    "path": {
+     "kind": "parameter"
+    },
+    "fh": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "open",
+     "origin": "builtin"
+    }
+   ],
+   "io": [
+    {
+     "line": 56,
+     "call": "open",
+     "direction": "read",
+     "kind": "file",
+     "target": "path"
+    }
+   ],
+   "blocks": {
+    "body": [
+     "analyze_logs.py:57"
+    ]
+   }
+  },
+  "analyze_logs.py:57": {
+   "id": "analyze_logs.py:57",
+   "file": "analyze_logs.py",
+   "line": 57,
+   "end": 57,
+   "full_end": 57,
+   "kind": "assign",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:56",
+   "block": "body",
+   "reads": [
+    "summarize",
+    "parse",
+    "fh"
+   ],
+   "writes": [
+    "rows"
+   ],
+   "names": {
+    "summarize": {
+     "kind": "function",
+     "where": "analyze_logs.py:33",
+     "id": "analyze_logs:summarize"
+    },
+    "parse": {
+     "kind": "function",
+     "where": "analyze_logs.py:18",
+     "id": "analyze_logs:parse"
+    },
+    "fh": {
+     "kind": "local"
+    },
+    "rows": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "parse",
+     "origin": "project",
+     "id": "analyze_logs:parse",
+     "where": "analyze_logs.py:18"
+    },
+    {
+     "call": "summarize",
+     "origin": "project",
+     "id": "analyze_logs:summarize",
+     "where": "analyze_logs.py:33"
+    }
+   ]
+  },
+  "analyze_logs.py:58": {
+   "id": "analyze_logs.py:58",
+   "file": "analyze_logs.py",
+   "line": 58,
+   "end": 58,
+   "full_end": 59,
+   "kind": "with",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "open",
+    "REPORT_PATH"
+   ],
+   "writes": [
+    "out"
+   ],
+   "names": {
+    "open": {
+     "kind": "builtin"
+    },
+    "REPORT_PATH": {
+     "kind": "constant",
+     "where": "analyze_logs.py:10",
+     "value": "'reports/errors.json'"
+    },
+    "out": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "open",
+     "origin": "builtin"
+    }
+   ],
+   "io": [
+    {
+     "line": 58,
+     "call": "open",
+     "direction": "write",
+     "kind": "file",
+     "target": "REPORT_PATH"
+    }
+   ],
+   "blocks": {
+    "body": [
+     "analyze_logs.py:59"
+    ]
+   }
+  },
+  "analyze_logs.py:59": {
+   "id": "analyze_logs.py:59",
+   "file": "analyze_logs.py",
+   "line": 59,
+   "end": 59,
+   "full_end": 59,
+   "kind": "call",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:58",
+   "block": "body",
+   "reads": [
+    "rows",
+    "out",
+    "json"
+   ],
+   "names": {
+    "rows": {
+     "kind": "local"
+    },
+    "out": {
+     "kind": "local"
+    },
+    "json": {
+     "kind": "import_stdlib",
+     "from": "json",
+     "package": "json"
+    }
+   },
+   "calls": [
+    {
+     "call": "json.dump",
+     "origin": "stdlib",
+     "package": "json",
+     "qualified": "json.dump"
+    }
+   ],
+   "io": [
+    {
+     "line": 59,
+     "call": "json.dump",
+     "direction": "write",
+     "kind": "file",
+     "target": "out"
+    }
+   ]
+  },
+  "analyze_logs.py:60": {
+   "id": "analyze_logs.py:60",
+   "file": "analyze_logs.py",
+   "line": 60,
+   "end": 60,
+   "full_end": 60,
+   "kind": "assign",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "sum",
+    "rows"
+   ],
+   "writes": [
+    "total"
+   ],
+   "names": {
+    "sum": {
+     "kind": "builtin"
+    },
+    "rows": {
+     "kind": "local"
+    },
+    "total": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "sum",
+     "origin": "builtin"
+    }
+   ]
+  },
+  "analyze_logs.py:61": {
+   "id": "analyze_logs.py:61",
+   "file": "analyze_logs.py",
+   "line": 61,
+   "end": 61,
+   "full_end": 61,
+   "kind": "assign",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "sum",
+    "rows"
+   ],
+   "writes": [
+    "errors"
+   ],
+   "names": {
+    "sum": {
+     "kind": "builtin"
+    },
+    "rows": {
+     "kind": "local"
+    },
+    "errors": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "sum",
+     "origin": "builtin"
+    }
+   ]
+  },
+  "analyze_logs.py:62": {
+   "id": "analyze_logs.py:62",
+   "file": "analyze_logs.py",
+   "line": 62,
+   "end": 62,
+   "full_end": 62,
+   "kind": "assign",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "total",
+    "errors"
+   ],
+   "writes": [
+    "rate"
+   ],
+   "names": {
+    "total": {
+     "kind": "local"
+    },
+    "errors": {
+     "kind": "local"
+    },
+    "rate": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:63": {
+   "id": "analyze_logs.py:63",
+   "file": "analyze_logs.py",
+   "line": 63,
+   "end": 63,
+   "full_end": 64,
+   "kind": "if",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "rate",
+    "ERROR_RATE_ALERT"
+   ],
+   "names": {
+    "rate": {
+     "kind": "local"
+    },
+    "ERROR_RATE_ALERT": {
+     "kind": "constant",
+     "where": "analyze_logs.py:11",
+     "value": "0.05"
+    }
+   },
+   "blocks": {
+    "body": [
+     "analyze_logs.py:64"
+    ]
+   }
+  },
+  "analyze_logs.py:64": {
+   "id": "analyze_logs.py:64",
+   "file": "analyze_logs.py",
+   "line": 64,
+   "end": 64,
+   "full_end": 64,
+   "kind": "call",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:63",
+   "block": "body",
+   "reads": [
+    "send_alert",
+    "rows",
+    "rate"
+   ],
+   "names": {
+    "send_alert": {
+     "kind": "function",
+     "where": "analyze_logs.py:44",
+     "id": "analyze_logs:send_alert"
+    },
+    "rows": {
+     "kind": "local"
+    },
+    "rate": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "send_alert",
+     "origin": "project",
+     "id": "analyze_logs:send_alert",
+     "where": "analyze_logs.py:44"
+    }
+   ]
+  },
+  "analyze_logs.py:65": {
+   "id": "analyze_logs.py:65",
+   "file": "analyze_logs.py",
+   "line": 65,
+   "end": 65,
+   "full_end": 65,
+   "kind": "return",
+   "scope": "analyze_logs:main",
+   "parent": "analyze_logs.py:55",
+   "block": "body",
+   "reads": [
+    "rate"
+   ],
+   "names": {
+    "rate": {
+     "kind": "local"
+    }
+   }
+  },
+  "analyze_logs.py:68": {
+   "id": "analyze_logs.py:68",
+   "file": "analyze_logs.py",
+   "line": 68,
+   "end": 68,
+   "full_end": 69,
+   "kind": "if",
+   "scope": "analyze_logs:<module>",
+   "reads": [
+    "__name__"
+   ],
+   "names": {
+    "__name__": {
+     "kind": "builtin"
+    }
+   },
+   "blocks": {
+    "body": [
+     "analyze_logs.py:69"
+    ]
+   }
+  },
+  "analyze_logs.py:69": {
+   "id": "analyze_logs.py:69",
+   "file": "analyze_logs.py",
+   "line": 69,
+   "end": 69,
+   "full_end": 69,
+   "kind": "call",
+   "scope": "analyze_logs:<module>",
+   "parent": "analyze_logs.py:68",
+   "block": "body",
+   "reads": [
+    "main",
+    "sys"
+   ],
+   "names": {
+    "main": {
+     "kind": "function",
+     "where": "analyze_logs.py:55",
+     "id": "analyze_logs:main"
+    },
+    "sys": {
+     "kind": "import_stdlib",
+     "from": "sys",
+     "package": "sys"
+    }
+   },
+   "calls": [
+    {
+     "call": "main",
+     "origin": "project",
+     "id": "analyze_logs:main",
+     "where": "analyze_logs.py:55"
+    }
+   ]
+  }
+ },
+ "docstrings": {
+  "analyze_logs:<module>": "Nightly check of web server logs: error rates per endpoint, with an email if things look bad.",
+  "analyze_logs:parse": "Turn raw log lines into dicts; skip lines that don't match.",
+  "analyze_logs:endpoint": "Collapse ids so /orders/123 and /orders/456 count together."
+ },
+ "plan": {
+  "view": "walkthrough",
+  "mode": "scan",
+  "focus": "whole program",
+  "max_steps": 150,
+  "steps": [
+   {
+    "type": "group",
+    "file": "analyze_logs.py",
+    "lines": [
+     2,
+     7
+    ],
+    "depth": 0,
+    "stmts": [
+     "analyze_logs.py:2",
+     "analyze_logs.py:3",
+     "analyze_logs.py:4",
+     "analyze_logs.py:5",
+     "analyze_logs.py:6",
+     "analyze_logs.py:7"
+    ],
+    "id": "s1"
+   },
+   {
+    "type": "group",
+    "file": "analyze_logs.py",
+    "lines": [
+     9,
+     13
+    ],
+    "depth": 0,
+    "stmts": [
+     "analyze_logs.py:9",
+     "analyze_logs.py:10",
+     "analyze_logs.py:11",
+     "analyze_logs.py:12",
+     "analyze_logs.py:13"
+    ],
+    "id": "s2"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:15",
+    "file": "analyze_logs.py",
+    "lines": [
+     15,
+     15
+    ],
+    "depth": 0,
+    "id": "s3"
+   },
+   {
+    "type": "group",
+    "file": "analyze_logs.py",
+    "lines": [
+     18,
+     55
+    ],
+    "depth": 0,
+    "stmts": [
+     "analyze_logs.py:18",
+     "analyze_logs.py:28",
+     "analyze_logs.py:33",
+     "analyze_logs.py:44",
+     "analyze_logs.py:55"
+    ],
+    "id": "s4"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:68",
+    "file": "analyze_logs.py",
+    "lines": [
+     68,
+     68
+    ],
+    "depth": 0,
+    "branch": {
+     "taken": "possible"
+    },
+    "id": "s5"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:69",
+    "file": "analyze_logs.py",
+    "lines": [
+     69,
+     69
+    ],
+    "depth": 0,
+    "possible": true,
+    "id": "s6"
+   },
+   {
+    "type": "enter",
+    "fn": "analyze_logs:main",
+    "depth": 1,
+    "from_step": "s6",
+    "def_stmt": "analyze_logs.py:55",
+    "id": "s7"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:56",
+    "file": "analyze_logs.py",
+    "lines": [
+     56,
+     56
+    ],
+    "depth": 1,
+    "id": "s8"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:57",
+    "file": "analyze_logs.py",
+    "lines": [
+     57,
+     57
+    ],
+    "depth": 1,
+    "id": "s9"
+   },
+   {
+    "type": "enter",
+    "fn": "analyze_logs:parse",
+    "depth": 2,
+    "from_step": "s9",
+    "def_stmt": "analyze_logs.py:18",
+    "id": "s10"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:20",
+    "file": "analyze_logs.py",
+    "lines": [
+     20,
+     20
+    ],
+    "depth": 2,
+    "loop": {
+     "iterations": null
+    },
+    "id": "s11"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:21",
+    "file": "analyze_logs.py",
+    "lines": [
+     21,
+     21
+    ],
+    "depth": 2,
+    "repeats": true,
+    "id": "s12"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:22",
+    "file": "analyze_logs.py",
+    "lines": [
+     22,
+     22
+    ],
+    "depth": 2,
+    "repeats": true,
+    "branch": {
+     "taken": "possible"
+    },
+    "id": "s13"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:23",
+    "file": "analyze_logs.py",
+    "lines": [
+     23,
+     23
+    ],
+    "depth": 2,
+    "possible": true,
+    "repeats": true,
+    "id": "s14"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:24",
+    "file": "analyze_logs.py",
+    "lines": [
+     24,
+     24
+    ],
+    "depth": 2,
+    "possible": true,
+    "repeats": true,
+    "id": "s15"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:25",
+    "file": "analyze_logs.py",
+    "lines": [
+     25,
+     25
+    ],
+    "depth": 2,
+    "possible": true,
+    "repeats": true,
+    "id": "s16"
+   },
+   {
+    "type": "return",
+    "fn": "analyze_logs:parse",
+    "depth": 2,
+    "to_step": "s9",
+    "id": "s17"
+   },
+   {
+    "type": "enter",
+    "fn": "analyze_logs:summarize",
+    "depth": 2,
+    "from_step": "s9",
+    "def_stmt": "analyze_logs.py:33",
+    "id": "s18"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:34",
+    "file": "analyze_logs.py",
+    "lines": [
+     34,
+     34
+    ],
+    "depth": 2,
+    "id": "s19"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:35",
+    "file": "analyze_logs.py",
+    "lines": [
+     35,
+     35
+    ],
+    "depth": 2,
+    "loop": {
+     "iterations": null
+    },
+    "id": "s20"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:36",
+    "file": "analyze_logs.py",
+    "lines": [
+     36,
+     36
+    ],
+    "depth": 2,
+    "repeats": true,
+    "id": "s21"
+   },
+   {
+    "type": "enter",
+    "fn": "analyze_logs:endpoint",
+    "depth": 3,
+    "from_step": "s21",
+    "def_stmt": "analyze_logs.py:28",
+    "id": "s22"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:30",
+    "file": "analyze_logs.py",
+    "lines": [
+     30,
+     30
+    ],
+    "depth": 3,
+    "id": "s23"
+   },
+   {
+    "type": "return",
+    "fn": "analyze_logs:endpoint",
+    "depth": 3,
+    "to_step": "s21",
+    "id": "s24"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:37",
+    "file": "analyze_logs.py",
+    "lines": [
+     37,
+     37
+    ],
+    "depth": 2,
+    "repeats": true,
+    "id": "s25"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:38",
+    "file": "analyze_logs.py",
+    "lines": [
+     38,
+     38
+    ],
+    "depth": 2,
+    "repeats": true,
+    "branch": {
+     "taken": "possible"
+    },
+    "id": "s26"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:39",
+    "file": "analyze_logs.py",
+    "lines": [
+     39,
+     39
+    ],
+    "depth": 2,
+    "possible": true,
+    "repeats": true,
+    "id": "s27"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:40",
+    "file": "analyze_logs.py",
+    "lines": [
+     40,
+     41
+    ],
+    "depth": 2,
+    "id": "s28"
+   },
+   {
+    "type": "return",
+    "fn": "analyze_logs:summarize",
+    "depth": 2,
+    "to_step": "s9",
+    "id": "s29"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:58",
+    "file": "analyze_logs.py",
+    "lines": [
+     58,
+     58
+    ],
+    "depth": 1,
+    "id": "s30"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:59",
+    "file": "analyze_logs.py",
+    "lines": [
+     59,
+     59
+    ],
+    "depth": 1,
+    "id": "s31"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:60",
+    "file": "analyze_logs.py",
+    "lines": [
+     60,
+     60
+    ],
+    "depth": 1,
+    "id": "s32"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:61",
+    "file": "analyze_logs.py",
+    "lines": [
+     61,
+     61
+    ],
+    "depth": 1,
+    "id": "s33"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:62",
+    "file": "analyze_logs.py",
+    "lines": [
+     62,
+     62
+    ],
+    "depth": 1,
+    "id": "s34"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:63",
+    "file": "analyze_logs.py",
+    "lines": [
+     63,
+     63
+    ],
+    "depth": 1,
+    "branch": {
+     "taken": "possible"
+    },
+    "id": "s35"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:64",
+    "file": "analyze_logs.py",
+    "lines": [
+     64,
+     64
+    ],
+    "depth": 1,
+    "possible": true,
+    "id": "s36"
+   },
+   {
+    "type": "enter",
+    "fn": "analyze_logs:send_alert",
+    "depth": 2,
+    "from_step": "s36",
+    "def_stmt": "analyze_logs.py:44",
+    "id": "s37"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:45",
+    "file": "analyze_logs.py",
+    "lines": [
+     45,
+     45
+    ],
+    "depth": 2,
+    "id": "s38"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:46",
+    "file": "analyze_logs.py",
+    "lines": [
+     46,
+     46
+    ],
+    "depth": 2,
+    "id": "s39"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:47",
+    "file": "analyze_logs.py",
+    "lines": [
+     47,
+     47
+    ],
+    "depth": 2,
+    "id": "s40"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:48",
+    "file": "analyze_logs.py",
+    "lines": [
+     48,
+     48
+    ],
+    "depth": 2,
+    "id": "s41"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:49",
+    "file": "analyze_logs.py",
+    "lines": [
+     49,
+     49
+    ],
+    "depth": 2,
+    "id": "s42"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:50",
+    "file": "analyze_logs.py",
+    "lines": [
+     50,
+     50
+    ],
+    "depth": 2,
+    "id": "s43"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:51",
+    "file": "analyze_logs.py",
+    "lines": [
+     51,
+     51
+    ],
+    "depth": 2,
+    "id": "s44"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:52",
+    "file": "analyze_logs.py",
+    "lines": [
+     52,
+     52
+    ],
+    "depth": 2,
+    "id": "s45"
+   },
+   {
+    "type": "return",
+    "fn": "analyze_logs:send_alert",
+    "depth": 2,
+    "to_step": "s36",
+    "id": "s46"
+   },
+   {
+    "type": "statement",
+    "stmt": "analyze_logs.py:65",
+    "file": "analyze_logs.py",
+    "lines": [
+     65,
+     65
+    ],
+    "depth": 1,
+    "id": "s47"
+   },
+   {
+    "type": "return",
+    "fn": "analyze_logs:main",
+    "depth": 1,
+    "to_step": "s6",
+    "id": "s48"
+   }
+  ],
+  "explain_first": [
+   "analyze_logs.py:68",
+   "analyze_logs.py:69",
+   "analyze_logs.py:56",
+   "analyze_logs.py:57",
+   "analyze_logs.py:22",
+   "analyze_logs.py:36",
+   "analyze_logs.py:38",
+   "analyze_logs.py:58",
+   "analyze_logs.py:59",
+   "analyze_logs.py:63",
+   "analyze_logs.py:64",
+   "analyze_logs.py:52",
+   "analyze_logs.py:20",
+   "analyze_logs.py:35",
+   "analyze_logs.py:30",
+   "analyze_logs.py:40",
+   "analyze_logs.py:65",
+   "analyze_logs.py:2",
+   "analyze_logs.py:3",
+   "analyze_logs.py:4",
+   "analyze_logs.py:5",
+   "analyze_logs.py:6",
+   "analyze_logs.py:7",
+   "analyze_logs.py:9",
+   "analyze_logs.py:10",
+   "analyze_logs.py:11",
+   "analyze_logs.py:12",
+   "analyze_logs.py:13",
+   "analyze_logs.py:15",
+   "analyze_logs.py:18",
+   "analyze_logs.py:28",
+   "analyze_logs.py:33",
+   "analyze_logs.py:44",
+   "analyze_logs.py:55",
+   "analyze_logs.py:21",
+   "analyze_logs.py:23",
+   "analyze_logs.py:24",
+   "analyze_logs.py:25",
+   "analyze_logs.py:34",
+   "analyze_logs.py:37",
+   "analyze_logs.py:39",
+   "analyze_logs.py:60",
+   "analyze_logs.py:61",
+   "analyze_logs.py:62",
+   "analyze_logs.py:45",
+   "analyze_logs.py:46",
+   "analyze_logs.py:47",
+   "analyze_logs.py:48",
+   "analyze_logs.py:49",
+   "analyze_logs.py:50",
+   "analyze_logs.py:51"
+  ],
+  "truncated": false,
+  "counts": {
+   "steps": 48,
+   "visible_steps": 48,
+   "statements": 51
+  }
+ }
+}
