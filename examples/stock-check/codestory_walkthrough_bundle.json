@@ -1,0 +1,5228 @@
+{
+ "schema": "codestory.bundle/2",
+ "tool_version": "0.2.0",
+ "mode": "run",
+ "created": "2026-10-10T08:15:00+00:00",
+ "entry": "reorder.py",
+ "entry_module": "reorder",
+ "root": "project",
+ "python": "3.12.3",
+ "run": {
+  "started_at": "2026-10-10T08:15:00+00:00",
+  "args": [],
+  "safe_mode": true,
+  "sandbox": "/tmp/codestory_sandbox",
+  "status": "ok",
+  "duration_ms": 17.3
+ },
+ "libraries": [
+  {
+   "name": "csv",
+   "kind": "stdlib",
+   "used_by": [
+    "reorder"
+   ]
+  },
+  {
+   "name": "dataclasses",
+   "kind": "stdlib",
+   "used_by": [
+    "reorder"
+   ]
+  },
+  {
+   "name": "json",
+   "kind": "stdlib",
+   "used_by": [
+    "reorder"
+   ]
+  },
+  {
+   "name": "sys",
+   "kind": "stdlib",
+   "used_by": [
+    "reorder"
+   ]
+  }
+ ],
+ "modules": {
+  "reorder": {
+   "name": "reorder",
+   "path": "reorder.py",
+   "lines": 50,
+   "imports": [
+    {
+     "module": "csv",
+     "names": [],
+     "alias": null,
+     "line": 2,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "json",
+     "names": [],
+     "alias": null,
+     "line": 3,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "sys",
+     "names": [],
+     "alias": null,
+     "line": 4,
+     "kind": "stdlib",
+     "scope": "module"
+    },
+    {
+     "module": "dataclasses",
+     "names": [
+      "dataclass"
+     ],
+     "alias": null,
+     "line": 5,
+     "kind": "stdlib",
+     "scope": "module"
+    }
+   ],
+   "constants": [
+    {
+     "name": "STOCK_CSV",
+     "line": 7,
+     "value": "'data/stock.csv'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "OUT_JSON",
+     "line": 8,
+     "value": "'orders.json'",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "SAFETY_DAYS",
+     "line": 9,
+     "value": "7",
+     "how": "literal",
+     "upper": true
+    },
+    {
+     "name": "MIN_ORDER",
+     "line": 10,
+     "value": "10",
+     "how": "literal",
+     "upper": true
+    }
+   ],
+   "functions": {
+    "load": {
+     "id": "reorder:load",
+     "name": "load",
+     "qualname": "load",
+     "line": 21,
+     "end": 23,
+     "args": [
+      "path"
+     ],
+     "calls": [
+      "open",
+      "Item",
+      "int",
+      "float",
+      "csv.DictReader"
+     ],
+     "io": [
+      {
+       "line": 22,
+       "call": "open",
+       "direction": "read",
+       "kind": "file",
+       "target": "path"
+      }
+     ],
+     "calls_project": [
+      "reorder:Item"
+     ],
+     "reach_depth": 1,
+     "source": "def load(path):\n    with open(path, newline=\"\") as fh:\n        return [Item(r[\"sku\"], int(r[\"on_hand\"]), float(r[\"daily_sales\"]), r[\"supplier\"]) for r in csv.DictReader(fh)]",
+     "executed": true,
+     "runtime": {
+      "calls": 1,
+      "total_ms": 0.8
+     }
+    },
+    "needed": {
+     "id": "reorder:needed",
+     "name": "needed",
+     "qualname": "needed",
+     "line": 26,
+     "end": 29,
+     "args": [
+      "item"
+     ],
+     "calls": [
+      "max",
+      "round"
+     ],
+     "calls_project": [],
+     "reach_depth": 2,
+     "source": "def needed(item):\n    target = item.daily_sales * SAFETY_DAYS\n    short = target - item.on_hand\n    return max(MIN_ORDER, round(short)) if short > 0 else 0",
+     "executed": true,
+     "runtime": {
+      "calls": 40,
+      "total_ms": 0.62
+     }
+    },
+    "plan_orders": {
+     "id": "reorder:plan_orders",
+     "name": "plan_orders",
+     "qualname": "plan_orders",
+     "line": 32,
+     "end": 38,
+     "args": [
+      "items"
+     ],
+     "calls": [
+      "needed",
+      "orders.setdefault().append",
+      "orders.setdefault"
+     ],
+     "branches": [
+      {
+       "line": 36,
+       "condition": "qty",
+       "has_else": false,
+       "body_lines": [
+        37,
+        37
+       ],
+       "note": "see trace to infer which side ran"
+      }
+     ],
+     "loops": [
+      {
+       "line": 34,
+       "code": "for item in items:"
+      }
+     ],
+     "calls_project": [
+      "reorder:needed"
+     ],
+     "reach_depth": 1,
+     "source": "def plan_orders(items):\n    orders = {}\n    for item in items:\n        qty = needed(item)\n        if qty:\n            orders.setdefault(item.supplier, []).append({\"sku\": item.sku, \"qty\": qty})\n    return orders",
+     "executed": true,
+     "runtime": {
+      "calls": 1,
+      "total_ms": 1.87
+     }
+    },
+    "main": {
+     "id": "reorder:main",
+     "name": "main",
+     "qualname": "main",
+     "line": 41,
+     "end": 46,
+     "args": [
+      "path"
+     ],
+     "calls": [
+      "load",
+      "plan_orders",
+      "open",
+      "json.dump",
+      "print",
+      "sum",
+      "len",
+      "orders.values"
+     ],
+     "io": [
+      {
+       "line": 44,
+       "call": "open",
+       "direction": "write",
+       "kind": "file",
+       "target": "OUT_JSON"
+      },
+      {
+       "line": 45,
+       "call": "json.dump",
+       "direction": "write",
+       "kind": "file",
+       "target": "fh"
+      }
+     ],
+     "calls_project": [
+      "reorder:load",
+      "reorder:plan_orders"
+     ],
+     "reach_depth": 0,
+     "source": "def main(path=STOCK_CSV):\n    items = load(path)\n    orders = plan_orders(items)\n    with open(OUT_JSON, \"w\") as fh:\n        json.dump(orders, fh, indent=2)\n    print(f\"{sum(len(v) for v in orders.values())} lines for {len(orders)} suppliers\")",
+     "executed": true,
+     "runtime": {
+      "calls": 1,
+      "total_ms": 5.04
+     }
+    }
+   },
+   "classes": {
+    "Item": {
+     "id": "reorder:Item",
+     "name": "Item",
+     "line": 14,
+     "end": 18,
+     "bases": [],
+     "doc": null
+    }
+   },
+   "main_flow": [
+    {
+     "line": 1,
+     "kind": "expr",
+     "code": "\"\"\"Nightly stock check: which products need reordering, and how many to order.\"\"\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 7,
+     "kind": "assign",
+     "code": "STOCK_CSV = \"data/stock.csv\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 8,
+     "kind": "assign",
+     "code": "OUT_JSON = \"orders.json\"",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 9,
+     "kind": "assign",
+     "code": "SAFETY_DAYS = 7",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 10,
+     "kind": "assign",
+     "code": "MIN_ORDER = 10",
+     "calls": [],
+     "calls_project": []
+    },
+    {
+     "line": 49,
+     "kind": "main_guard",
+     "code": "if __name__ == \"__main__\":",
+     "calls": [
+      "main"
+     ],
+     "branches": [
+      {
+       "line": 49,
+       "condition": "__name__ == \"__main__\"",
+       "has_else": false,
+       "body_lines": [
+        50,
+        50
+       ]
+      }
+     ],
+     "body": [
+      {
+       "line": 50,
+       "code": "main(*sys.argv[1:])",
+       "calls": [
+        "main"
+       ],
+       "calls_project": [
+        "reorder:main"
+       ]
+      }
+     ],
+     "calls_project": [
+      "reorder:main"
+     ]
+    }
+   ],
+   "module_code": "1: \"\"\"Nightly stock check: which products need reordering, and how many to order.\"\"\"\n2: import csv\n3: import json\n4: import sys\n5: from dataclasses import dataclass\n7: STOCK_CSV = \"data/stock.csv\"\n8: OUT_JSON = \"orders.json\"\n9: SAFETY_DAYS = 7          # keep a week of stock on hand\n10: MIN_ORDER = 10\n13: @dataclass\n49: if __name__ == \"__main__\":\n50:     main(*sys.argv[1:])"
+  }
+ },
+ "runtime_constants": {
+  "reorder.STOCK_CSV": {
+   "type": "str",
+   "len": 14,
+   "value": "data/stock.csv"
+  },
+  "reorder.OUT_JSON": {
+   "type": "str",
+   "len": 11,
+   "value": "orders.json"
+  },
+  "reorder.SAFETY_DAYS": {
+   "type": "int",
+   "value": "7"
+  },
+  "reorder.MIN_ORDER": {
+   "type": "int",
+   "value": "10"
+  }
+ },
+ "trace": {
+  "nodes": [
+   {
+    "id": 1,
+    "fn": "reorder:<module>",
+    "parent": null,
+    "t_ms": 4.13,
+    "dur_ms": 13.43,
+    "args": {},
+    "line_counts": {
+     "1": 1,
+     "2": 1,
+     "3": 1,
+     "4": 1,
+     "5": 1,
+     "7": 1,
+     "8": 1,
+     "9": 1,
+     "10": 1,
+     "13": 2,
+     "14": 2,
+     "21": 1,
+     "26": 1,
+     "32": 1,
+     "41": 1,
+     "49": 1,
+     "50": 1
+    }
+   },
+   {
+    "id": 2,
+    "fn": "reorder:Item",
+    "parent": 1,
+    "t_ms": 10.74,
+    "dur_ms": 0.03,
+    "args": {},
+    "ret": {
+     "type": "NoneType",
+     "value": "None"
+    }
+   },
+   {
+    "id": 3,
+    "fn": "reorder:main",
+    "parent": 1,
+    "t_ms": 12.48,
+    "dur_ms": 5.04,
+    "args": {
+     "path": {
+      "type": "str",
+      "len": 14,
+      "value": "data/stock.csv"
+     }
+    },
+    "io": [
+     2
+    ],
+    "line_counts": {
+     "42": 1,
+     "43": 1,
+     "44": 2,
+     "45": 1,
+     "46": 1
+    },
+    "ret": {
+     "type": "NoneType",
+     "value": "None"
+    }
+   },
+   {
+    "id": 4,
+    "fn": "reorder:load",
+    "parent": 3,
+    "t_ms": 12.59,
+    "dur_ms": 0.8,
+    "args": {
+     "path": {
+      "type": "str",
+      "len": 14,
+      "value": "data/stock.csv"
+     }
+    },
+    "io": [
+     1
+    ],
+    "line_counts": {
+     "22": 2,
+     "23": 1
+    },
+    "ret": {
+     "type": "list",
+     "len": 40,
+     "sample": [
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-100"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "159"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "5.5"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 8,
+         "value": "Borealis"
+        }
+       }
+      },
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-101"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "176"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "18.9"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 6,
+         "value": "Cobalt"
+        }
+       }
+      },
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-102"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "166"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "18.5"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 4,
+         "value": "Acme"
+        }
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": 5,
+    "fn": "reorder:plan_orders",
+    "parent": 3,
+    "t_ms": 13.56,
+    "dur_ms": 1.87,
+    "args": {
+     "items": {
+      "type": "list",
+      "len": 40,
+      "sample": [
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-100"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "159"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "5.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 8,
+          "value": "Borealis"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-101"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "176"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.9"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 6,
+          "value": "Cobalt"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-102"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "166"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 4,
+          "value": "Acme"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "repeats": {
+     "reorder:needed": 37
+    },
+    "line_counts": {
+     "33": 1,
+     "34": 41,
+     "35": 40,
+     "36": 40,
+     "37": 16,
+     "38": 1
+    },
+    "ret": {
+     "type": "dict",
+     "len": 3,
+     "keys": [
+      "Acme",
+      "Borealis",
+      "Cobalt"
+     ],
+     "values": {
+      "Acme": {
+       "type": "list",
+       "len": 6,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      },
+      "Borealis": {
+       "type": "list",
+       "len": 8,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      },
+      "Cobalt": {
+       "type": "list",
+       "len": 2,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": 6,
+    "fn": "reorder:needed",
+    "parent": 5,
+    "t_ms": 13.77,
+    "dur_ms": 0.08,
+    "args": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-100"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "159"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "5.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     }
+    },
+    "line_counts": {
+     "27": 1,
+     "28": 1,
+     "29": 1
+    },
+    "ret": {
+     "type": "int",
+     "value": "0"
+    }
+   },
+   {
+    "id": 7,
+    "fn": "reorder:needed",
+    "parent": 5,
+    "t_ms": 13.96,
+    "dur_ms": 0.07,
+    "args": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-101"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "176"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.9"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 6,
+        "value": "Cobalt"
+       }
+      }
+     }
+    },
+    "line_counts": {
+     "27": 1,
+     "28": 1,
+     "29": 1
+    },
+    "ret": {
+     "type": "int",
+     "value": "0"
+    }
+   },
+   {
+    "id": 8,
+    "fn": "reorder:needed",
+    "parent": 5,
+    "t_ms": 14.08,
+    "dur_ms": 0.07,
+    "args": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-102"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "166"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     }
+    },
+    "line_counts": {
+     "27": 1,
+     "28": 1,
+     "29": 1
+    },
+    "ret": {
+     "type": "int",
+     "value": "0"
+    }
+   }
+  ],
+  "function_stats": {
+   "reorder:<module>": {
+    "calls": 1,
+    "total_ms": 13.43
+   },
+   "reorder:Item": {
+    "calls": 1,
+    "total_ms": 0.03
+   },
+   "reorder:main": {
+    "calls": 1,
+    "total_ms": 5.04
+   },
+   "reorder:load": {
+    "calls": 1,
+    "total_ms": 0.8
+   },
+   "reorder:plan_orders": {
+    "calls": 1,
+    "total_ms": 1.87
+   },
+   "reorder:needed": {
+    "calls": 40,
+    "total_ms": 0.62
+   }
+  },
+  "truncated": false,
+  "note": "The first 3 calls of a function under the same parent are kept in detail; further calls are counted in the parent's 'repeats'."
+ },
+ "io": {
+  "events": [
+   {
+    "seq": 1,
+    "kind": "file",
+    "op": "read",
+    "target": "data/stock.csv",
+    "fn": "reorder:load",
+    "node": 4,
+    "count": 1,
+    "t_ms": 12.9,
+    "mode": "r",
+    "bytes": 946
+   },
+   {
+    "seq": 2,
+    "kind": "file",
+    "op": "write",
+    "target": "orders.json",
+    "fn": "reorder:main",
+    "node": 3,
+    "count": 1,
+    "t_ms": 16.81,
+    "mode": "w",
+    "handled": "redirected",
+    "sandbox": "/tmp/codestory_sandbox/files/orders.json"
+   }
+  ],
+  "intercepted": [
+   {
+    "seq": 2,
+    "kind": "file",
+    "op": "write",
+    "target": "orders.json",
+    "handled": "redirected",
+    "count": 1
+   }
+  ],
+  "real_effects": [],
+  "not_intercepted_libraries": [],
+  "shadow_tables": {},
+  "env_vars": {}
+ },
+ "unexecuted_functions": [],
+ "budget": {
+  "chars_used": 1157,
+  "functions_trimmed": 0
+ },
+ "view": "walkthrough",
+ "focus": "whole program",
+ "sources": {
+  "reorder.py": "\"\"\"Nightly stock check: which products need reordering, and how many to order.\"\"\"\nimport csv\nimport json\nimport sys\nfrom dataclasses import dataclass\n\nSTOCK_CSV = \"data/stock.csv\"\nOUT_JSON = \"orders.json\"\nSAFETY_DAYS = 7          # keep a week of stock on hand\nMIN_ORDER = 10\n\n\n@dataclass\nclass Item:\n    sku: str\n    on_hand: int\n    daily_sales: float\n    supplier: str\n\n\ndef load(path):\n    with open(path, newline=\"\") as fh:\n        return [Item(r[\"sku\"], int(r[\"on_hand\"]), float(r[\"daily_sales\"]), r[\"supplier\"]) for r in csv.DictReader(fh)]\n\n\ndef needed(item):\n    target = item.daily_sales * SAFETY_DAYS\n    short = target - item.on_hand\n    return max(MIN_ORDER, round(short)) if short > 0 else 0\n\n\ndef plan_orders(items):\n    orders = {}\n    for item in items:\n        qty = needed(item)\n        if qty:\n            orders.setdefault(item.supplier, []).append({\"sku\": item.sku, \"qty\": qty})\n    return orders\n\n\ndef main(path=STOCK_CSV):\n    items = load(path)\n    orders = plan_orders(items)\n    with open(OUT_JSON, \"w\") as fh:\n        json.dump(orders, fh, indent=2)\n    print(f\"{sum(len(v) for v in orders.values())} lines for {len(orders)} suppliers\")\n\n\nif __name__ == \"__main__\":\n    main(*sys.argv[1:])"
+ },
+ "statements": {
+  "reorder.py:2": {
+   "id": "reorder.py:2",
+   "file": "reorder.py",
+   "line": 2,
+   "end": 2,
+   "full_end": 2,
+   "kind": "import",
+   "scope": "reorder:<module>",
+   "writes": [
+    "csv"
+   ],
+   "names": {
+    "csv": {
+     "kind": "import_stdlib",
+     "from": "csv",
+     "package": "csv"
+    }
+   },
+   "group": "import"
+  },
+  "reorder.py:3": {
+   "id": "reorder.py:3",
+   "file": "reorder.py",
+   "line": 3,
+   "end": 3,
+   "full_end": 3,
+   "kind": "import",
+   "scope": "reorder:<module>",
+   "writes": [
+    "json"
+   ],
+   "names": {
+    "json": {
+     "kind": "import_stdlib",
+     "from": "json",
+     "package": "json"
+    }
+   },
+   "group": "import"
+  },
+  "reorder.py:4": {
+   "id": "reorder.py:4",
+   "file": "reorder.py",
+   "line": 4,
+   "end": 4,
+   "full_end": 4,
+   "kind": "import",
+   "scope": "reorder:<module>",
+   "writes": [
+    "sys"
+   ],
+   "names": {
+    "sys": {
+     "kind": "import_stdlib",
+     "from": "sys",
+     "package": "sys"
+    }
+   },
+   "group": "import"
+  },
+  "reorder.py:5": {
+   "id": "reorder.py:5",
+   "file": "reorder.py",
+   "line": 5,
+   "end": 5,
+   "full_end": 5,
+   "kind": "import",
+   "scope": "reorder:<module>",
+   "writes": [
+    "dataclass"
+   ],
+   "names": {
+    "dataclass": {
+     "kind": "import_stdlib",
+     "from": "dataclasses.dataclass",
+     "package": "dataclasses"
+    }
+   },
+   "group": "import"
+  },
+  "reorder.py:7": {
+   "id": "reorder.py:7",
+   "file": "reorder.py",
+   "line": 7,
+   "end": 7,
+   "full_end": 7,
+   "kind": "constant",
+   "scope": "reorder:<module>",
+   "writes": [
+    "STOCK_CSV"
+   ],
+   "names": {
+    "STOCK_CSV": {
+     "kind": "constant",
+     "where": "reorder.py:7",
+     "value": "'data/stock.csv'"
+    }
+   },
+   "value": "'data/stock.csv'",
+   "group": "constant"
+  },
+  "reorder.py:8": {
+   "id": "reorder.py:8",
+   "file": "reorder.py",
+   "line": 8,
+   "end": 8,
+   "full_end": 8,
+   "kind": "constant",
+   "scope": "reorder:<module>",
+   "writes": [
+    "OUT_JSON"
+   ],
+   "names": {
+    "OUT_JSON": {
+     "kind": "constant",
+     "where": "reorder.py:8",
+     "value": "'orders.json'"
+    }
+   },
+   "value": "'orders.json'",
+   "group": "constant"
+  },
+  "reorder.py:9": {
+   "id": "reorder.py:9",
+   "file": "reorder.py",
+   "line": 9,
+   "end": 9,
+   "full_end": 9,
+   "kind": "constant",
+   "scope": "reorder:<module>",
+   "writes": [
+    "SAFETY_DAYS"
+   ],
+   "names": {
+    "SAFETY_DAYS": {
+     "kind": "constant",
+     "where": "reorder.py:9",
+     "value": "7"
+    }
+   },
+   "value": "7",
+   "comments": [
+    "keep a week of stock on hand"
+   ],
+   "group": "constant"
+  },
+  "reorder.py:10": {
+   "id": "reorder.py:10",
+   "file": "reorder.py",
+   "line": 10,
+   "end": 10,
+   "full_end": 10,
+   "kind": "constant",
+   "scope": "reorder:<module>",
+   "writes": [
+    "MIN_ORDER"
+   ],
+   "names": {
+    "MIN_ORDER": {
+     "kind": "constant",
+     "where": "reorder.py:10",
+     "value": "10"
+    }
+   },
+   "value": "10",
+   "group": "constant"
+  },
+  "reorder.py:13": {
+   "id": "reorder.py:13",
+   "file": "reorder.py",
+   "line": 13,
+   "end": 14,
+   "full_end": 18,
+   "kind": "class",
+   "scope": "reorder:<module>",
+   "reads": [
+    "dataclass"
+   ],
+   "writes": [
+    "Item"
+   ],
+   "names": {
+    "dataclass": {
+     "kind": "import_stdlib",
+     "from": "dataclasses.dataclass",
+     "package": "dataclasses"
+    },
+    "Item": {
+     "kind": "class",
+     "where": "reorder.py:14",
+     "id": "reorder:Item"
+    }
+   },
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "reorder.py:15",
+     "reorder.py:16",
+     "reorder.py:17",
+     "reorder.py:18"
+    ]
+   }
+  },
+  "reorder.py:15": {
+   "id": "reorder.py:15",
+   "file": "reorder.py",
+   "line": 15,
+   "end": 15,
+   "full_end": 15,
+   "kind": "assign",
+   "scope": "reorder:Item",
+   "parent": "reorder.py:13",
+   "block": "body",
+   "reads": [
+    "str"
+   ],
+   "writes": [
+    "sku"
+   ],
+   "names": {
+    "str": {
+     "kind": "builtin"
+    }
+   },
+   "hint": "str",
+   "group": "simple"
+  },
+  "reorder.py:16": {
+   "id": "reorder.py:16",
+   "file": "reorder.py",
+   "line": 16,
+   "end": 16,
+   "full_end": 16,
+   "kind": "assign",
+   "scope": "reorder:Item",
+   "parent": "reorder.py:13",
+   "block": "body",
+   "reads": [
+    "int"
+   ],
+   "writes": [
+    "on_hand"
+   ],
+   "names": {
+    "int": {
+     "kind": "builtin"
+    }
+   },
+   "hint": "int",
+   "group": "simple"
+  },
+  "reorder.py:17": {
+   "id": "reorder.py:17",
+   "file": "reorder.py",
+   "line": 17,
+   "end": 17,
+   "full_end": 17,
+   "kind": "assign",
+   "scope": "reorder:Item",
+   "parent": "reorder.py:13",
+   "block": "body",
+   "reads": [
+    "float"
+   ],
+   "writes": [
+    "daily_sales"
+   ],
+   "names": {
+    "float": {
+     "kind": "builtin"
+    }
+   },
+   "hint": "float",
+   "group": "simple"
+  },
+  "reorder.py:18": {
+   "id": "reorder.py:18",
+   "file": "reorder.py",
+   "line": 18,
+   "end": 18,
+   "full_end": 18,
+   "kind": "assign",
+   "scope": "reorder:Item",
+   "parent": "reorder.py:13",
+   "block": "body",
+   "reads": [
+    "str"
+   ],
+   "writes": [
+    "supplier"
+   ],
+   "names": {
+    "str": {
+     "kind": "builtin"
+    }
+   },
+   "hint": "str",
+   "group": "simple"
+  },
+  "reorder.py:21": {
+   "id": "reorder.py:21",
+   "file": "reorder.py",
+   "line": 21,
+   "end": 21,
+   "full_end": 23,
+   "kind": "def",
+   "scope": "reorder:<module>",
+   "writes": [
+    "load"
+   ],
+   "names": {
+    "load": {
+     "kind": "function",
+     "where": "reorder.py:21",
+     "id": "reorder:load"
+    }
+   },
+   "defines": "reorder:load",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "reorder.py:22"
+    ]
+   }
+  },
+  "reorder.py:22": {
+   "id": "reorder.py:22",
+   "file": "reorder.py",
+   "line": 22,
+   "end": 22,
+   "full_end": 23,
+   "kind": "with",
+   "scope": "reorder:load",
+   "parent": "reorder.py:21",
+   "block": "body",
+   "reads": [
+    "open",
+    "path"
+   ],
+   "writes": [
+    "fh"
+   ],
+   "names": {
+    "open": {
+     "kind": "builtin"
+    },
+    "path": {
+     "kind": "parameter"
+    },
+    "fh": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "open",
+     "origin": "builtin"
+    }
+   ],
+   "io": [
+    {
+     "line": 22,
+     "call": "open",
+     "direction": "read",
+     "kind": "file",
+     "target": "path"
+    }
+   ],
+   "blocks": {
+    "body": [
+     "reorder.py:23"
+    ]
+   }
+  },
+  "reorder.py:23": {
+   "id": "reorder.py:23",
+   "file": "reorder.py",
+   "line": 23,
+   "end": 23,
+   "full_end": 23,
+   "kind": "return",
+   "scope": "reorder:load",
+   "parent": "reorder.py:22",
+   "block": "body",
+   "reads": [
+    "Item",
+    "int",
+    "float",
+    "fh",
+    "csv"
+   ],
+   "names": {
+    "Item": {
+     "kind": "class",
+     "where": "reorder.py:14",
+     "id": "reorder:Item"
+    },
+    "int": {
+     "kind": "builtin"
+    },
+    "float": {
+     "kind": "builtin"
+    },
+    "fh": {
+     "kind": "local"
+    },
+    "csv": {
+     "kind": "import_stdlib",
+     "from": "csv",
+     "package": "csv"
+    }
+   },
+   "calls": [
+    {
+     "call": "int",
+     "origin": "builtin"
+    },
+    {
+     "call": "float",
+     "origin": "builtin"
+    },
+    {
+     "call": "Item",
+     "origin": "project",
+     "id": "reorder:Item",
+     "where": "reorder.py:14"
+    },
+    {
+     "call": "csv.DictReader",
+     "origin": "stdlib",
+     "package": "csv",
+     "qualified": "csv.DictReader"
+    }
+   ]
+  },
+  "reorder.py:26": {
+   "id": "reorder.py:26",
+   "file": "reorder.py",
+   "line": 26,
+   "end": 26,
+   "full_end": 29,
+   "kind": "def",
+   "scope": "reorder:<module>",
+   "writes": [
+    "needed"
+   ],
+   "names": {
+    "needed": {
+     "kind": "function",
+     "where": "reorder.py:26",
+     "id": "reorder:needed"
+    }
+   },
+   "defines": "reorder:needed",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "reorder.py:27",
+     "reorder.py:28",
+     "reorder.py:29"
+    ]
+   }
+  },
+  "reorder.py:27": {
+   "id": "reorder.py:27",
+   "file": "reorder.py",
+   "line": 27,
+   "end": 27,
+   "full_end": 27,
+   "kind": "assign",
+   "scope": "reorder:needed",
+   "parent": "reorder.py:26",
+   "block": "body",
+   "reads": [
+    "SAFETY_DAYS",
+    "item"
+   ],
+   "writes": [
+    "target"
+   ],
+   "names": {
+    "SAFETY_DAYS": {
+     "kind": "constant",
+     "where": "reorder.py:9",
+     "value": "7"
+    },
+    "item": {
+     "kind": "parameter"
+    },
+    "target": {
+     "kind": "local"
+    }
+   }
+  },
+  "reorder.py:28": {
+   "id": "reorder.py:28",
+   "file": "reorder.py",
+   "line": 28,
+   "end": 28,
+   "full_end": 28,
+   "kind": "assign",
+   "scope": "reorder:needed",
+   "parent": "reorder.py:26",
+   "block": "body",
+   "reads": [
+    "target",
+    "item"
+   ],
+   "writes": [
+    "short"
+   ],
+   "names": {
+    "target": {
+     "kind": "local"
+    },
+    "item": {
+     "kind": "parameter"
+    },
+    "short": {
+     "kind": "local"
+    }
+   }
+  },
+  "reorder.py:29": {
+   "id": "reorder.py:29",
+   "file": "reorder.py",
+   "line": 29,
+   "end": 29,
+   "full_end": 29,
+   "kind": "return",
+   "scope": "reorder:needed",
+   "parent": "reorder.py:26",
+   "block": "body",
+   "reads": [
+    "short",
+    "max",
+    "MIN_ORDER",
+    "round"
+   ],
+   "names": {
+    "short": {
+     "kind": "local"
+    },
+    "max": {
+     "kind": "builtin"
+    },
+    "MIN_ORDER": {
+     "kind": "constant",
+     "where": "reorder.py:10",
+     "value": "10"
+    },
+    "round": {
+     "kind": "builtin"
+    }
+   },
+   "calls": [
+    {
+     "call": "round",
+     "origin": "builtin"
+    },
+    {
+     "call": "max",
+     "origin": "builtin"
+    }
+   ]
+  },
+  "reorder.py:32": {
+   "id": "reorder.py:32",
+   "file": "reorder.py",
+   "line": 32,
+   "end": 32,
+   "full_end": 38,
+   "kind": "def",
+   "scope": "reorder:<module>",
+   "writes": [
+    "plan_orders"
+   ],
+   "names": {
+    "plan_orders": {
+     "kind": "function",
+     "where": "reorder.py:32",
+     "id": "reorder:plan_orders"
+    }
+   },
+   "defines": "reorder:plan_orders",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "reorder.py:33",
+     "reorder.py:34",
+     "reorder.py:38"
+    ]
+   }
+  },
+  "reorder.py:33": {
+   "id": "reorder.py:33",
+   "file": "reorder.py",
+   "line": 33,
+   "end": 33,
+   "full_end": 33,
+   "kind": "assign",
+   "scope": "reorder:plan_orders",
+   "parent": "reorder.py:32",
+   "block": "body",
+   "writes": [
+    "orders"
+   ],
+   "names": {
+    "orders": {
+     "kind": "local"
+    }
+   },
+   "group": "simple"
+  },
+  "reorder.py:34": {
+   "id": "reorder.py:34",
+   "file": "reorder.py",
+   "line": 34,
+   "end": 34,
+   "full_end": 37,
+   "kind": "for",
+   "scope": "reorder:plan_orders",
+   "parent": "reorder.py:32",
+   "block": "body",
+   "reads": [
+    "items"
+   ],
+   "writes": [
+    "item"
+   ],
+   "names": {
+    "items": {
+     "kind": "parameter"
+    },
+    "item": {
+     "kind": "local"
+    }
+   },
+   "blocks": {
+    "body": [
+     "reorder.py:35",
+     "reorder.py:36"
+    ]
+   }
+  },
+  "reorder.py:35": {
+   "id": "reorder.py:35",
+   "file": "reorder.py",
+   "line": 35,
+   "end": 35,
+   "full_end": 35,
+   "kind": "assign",
+   "scope": "reorder:plan_orders",
+   "parent": "reorder.py:34",
+   "block": "body",
+   "reads": [
+    "needed",
+    "item"
+   ],
+   "writes": [
+    "qty"
+   ],
+   "names": {
+    "needed": {
+     "kind": "function",
+     "where": "reorder.py:26",
+     "id": "reorder:needed"
+    },
+    "item": {
+     "kind": "local"
+    },
+    "qty": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "needed",
+     "origin": "project",
+     "id": "reorder:needed",
+     "where": "reorder.py:26"
+    }
+   ]
+  },
+  "reorder.py:36": {
+   "id": "reorder.py:36",
+   "file": "reorder.py",
+   "line": 36,
+   "end": 36,
+   "full_end": 37,
+   "kind": "if",
+   "scope": "reorder:plan_orders",
+   "parent": "reorder.py:34",
+   "block": "body",
+   "reads": [
+    "qty"
+   ],
+   "names": {
+    "qty": {
+     "kind": "local"
+    }
+   },
+   "blocks": {
+    "body": [
+     "reorder.py:37"
+    ]
+   }
+  },
+  "reorder.py:37": {
+   "id": "reorder.py:37",
+   "file": "reorder.py",
+   "line": 37,
+   "end": 37,
+   "full_end": 37,
+   "kind": "call",
+   "scope": "reorder:plan_orders",
+   "parent": "reorder.py:36",
+   "block": "body",
+   "reads": [
+    "qty",
+    "item",
+    "orders"
+   ],
+   "names": {
+    "qty": {
+     "kind": "local"
+    },
+    "item": {
+     "kind": "local"
+    },
+    "orders": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "orders.setdefault",
+     "origin": "method",
+     "on": "orders"
+    },
+    {
+     "call": "orders.setdefault().append",
+     "origin": "method",
+     "on": "orders"
+    }
+   ]
+  },
+  "reorder.py:38": {
+   "id": "reorder.py:38",
+   "file": "reorder.py",
+   "line": 38,
+   "end": 38,
+   "full_end": 38,
+   "kind": "return",
+   "scope": "reorder:plan_orders",
+   "parent": "reorder.py:32",
+   "block": "body",
+   "reads": [
+    "orders"
+   ],
+   "names": {
+    "orders": {
+     "kind": "local"
+    }
+   }
+  },
+  "reorder.py:41": {
+   "id": "reorder.py:41",
+   "file": "reorder.py",
+   "line": 41,
+   "end": 41,
+   "full_end": 46,
+   "kind": "def",
+   "scope": "reorder:<module>",
+   "reads": [
+    "STOCK_CSV"
+   ],
+   "writes": [
+    "main"
+   ],
+   "names": {
+    "STOCK_CSV": {
+     "kind": "constant",
+     "where": "reorder.py:7",
+     "value": "'data/stock.csv'"
+    },
+    "main": {
+     "kind": "function",
+     "where": "reorder.py:41",
+     "id": "reorder:main"
+    }
+   },
+   "defines": "reorder:main",
+   "group": "definition",
+   "blocks": {
+    "body": [
+     "reorder.py:42",
+     "reorder.py:43",
+     "reorder.py:44",
+     "reorder.py:46"
+    ]
+   }
+  },
+  "reorder.py:42": {
+   "id": "reorder.py:42",
+   "file": "reorder.py",
+   "line": 42,
+   "end": 42,
+   "full_end": 42,
+   "kind": "assign",
+   "scope": "reorder:main",
+   "parent": "reorder.py:41",
+   "block": "body",
+   "reads": [
+    "load",
+    "path"
+   ],
+   "writes": [
+    "items"
+   ],
+   "names": {
+    "load": {
+     "kind": "function",
+     "where": "reorder.py:21",
+     "id": "reorder:load"
+    },
+    "path": {
+     "kind": "parameter"
+    },
+    "items": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "load",
+     "origin": "project",
+     "id": "reorder:load",
+     "where": "reorder.py:21"
+    }
+   ]
+  },
+  "reorder.py:43": {
+   "id": "reorder.py:43",
+   "file": "reorder.py",
+   "line": 43,
+   "end": 43,
+   "full_end": 43,
+   "kind": "assign",
+   "scope": "reorder:main",
+   "parent": "reorder.py:41",
+   "block": "body",
+   "reads": [
+    "plan_orders",
+    "items"
+   ],
+   "writes": [
+    "orders"
+   ],
+   "names": {
+    "plan_orders": {
+     "kind": "function",
+     "where": "reorder.py:32",
+     "id": "reorder:plan_orders"
+    },
+    "items": {
+     "kind": "local"
+    },
+    "orders": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "plan_orders",
+     "origin": "project",
+     "id": "reorder:plan_orders",
+     "where": "reorder.py:32"
+    }
+   ]
+  },
+  "reorder.py:44": {
+   "id": "reorder.py:44",
+   "file": "reorder.py",
+   "line": 44,
+   "end": 44,
+   "full_end": 45,
+   "kind": "with",
+   "scope": "reorder:main",
+   "parent": "reorder.py:41",
+   "block": "body",
+   "reads": [
+    "open",
+    "OUT_JSON"
+   ],
+   "writes": [
+    "fh"
+   ],
+   "names": {
+    "open": {
+     "kind": "builtin"
+    },
+    "OUT_JSON": {
+     "kind": "constant",
+     "where": "reorder.py:8",
+     "value": "'orders.json'"
+    },
+    "fh": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "open",
+     "origin": "builtin"
+    }
+   ],
+   "io": [
+    {
+     "line": 44,
+     "call": "open",
+     "direction": "write",
+     "kind": "file",
+     "target": "OUT_JSON"
+    }
+   ],
+   "blocks": {
+    "body": [
+     "reorder.py:45"
+    ]
+   }
+  },
+  "reorder.py:45": {
+   "id": "reorder.py:45",
+   "file": "reorder.py",
+   "line": 45,
+   "end": 45,
+   "full_end": 45,
+   "kind": "call",
+   "scope": "reorder:main",
+   "parent": "reorder.py:44",
+   "block": "body",
+   "reads": [
+    "orders",
+    "fh",
+    "json"
+   ],
+   "names": {
+    "orders": {
+     "kind": "local"
+    },
+    "fh": {
+     "kind": "local"
+    },
+    "json": {
+     "kind": "import_stdlib",
+     "from": "json",
+     "package": "json"
+    }
+   },
+   "calls": [
+    {
+     "call": "json.dump",
+     "origin": "stdlib",
+     "package": "json",
+     "qualified": "json.dump"
+    }
+   ],
+   "io": [
+    {
+     "line": 45,
+     "call": "json.dump",
+     "direction": "write",
+     "kind": "file",
+     "target": "fh"
+    }
+   ]
+  },
+  "reorder.py:46": {
+   "id": "reorder.py:46",
+   "file": "reorder.py",
+   "line": 46,
+   "end": 46,
+   "full_end": 46,
+   "kind": "call",
+   "scope": "reorder:main",
+   "parent": "reorder.py:41",
+   "block": "body",
+   "reads": [
+    "print",
+    "sum",
+    "len",
+    "orders"
+   ],
+   "names": {
+    "print": {
+     "kind": "builtin"
+    },
+    "sum": {
+     "kind": "builtin"
+    },
+    "len": {
+     "kind": "builtin"
+    },
+    "orders": {
+     "kind": "local"
+    }
+   },
+   "calls": [
+    {
+     "call": "len",
+     "origin": "builtin"
+    },
+    {
+     "call": "orders.values",
+     "origin": "method",
+     "on": "orders"
+    },
+    {
+     "call": "sum",
+     "origin": "builtin"
+    },
+    {
+     "call": "print",
+     "origin": "builtin"
+    }
+   ]
+  },
+  "reorder.py:49": {
+   "id": "reorder.py:49",
+   "file": "reorder.py",
+   "line": 49,
+   "end": 49,
+   "full_end": 50,
+   "kind": "if",
+   "scope": "reorder:<module>",
+   "reads": [
+    "__name__"
+   ],
+   "names": {
+    "__name__": {
+     "kind": "builtin"
+    }
+   },
+   "blocks": {
+    "body": [
+     "reorder.py:50"
+    ]
+   }
+  },
+  "reorder.py:50": {
+   "id": "reorder.py:50",
+   "file": "reorder.py",
+   "line": 50,
+   "end": 50,
+   "full_end": 50,
+   "kind": "call",
+   "scope": "reorder:<module>",
+   "parent": "reorder.py:49",
+   "block": "body",
+   "reads": [
+    "main",
+    "sys"
+   ],
+   "names": {
+    "main": {
+     "kind": "function",
+     "where": "reorder.py:41",
+     "id": "reorder:main"
+    },
+    "sys": {
+     "kind": "import_stdlib",
+     "from": "sys",
+     "package": "sys"
+    }
+   },
+   "calls": [
+    {
+     "call": "main",
+     "origin": "project",
+     "id": "reorder:main",
+     "where": "reorder.py:41"
+    }
+   ]
+  }
+ },
+ "docstrings": {
+  "reorder:<module>": "Nightly stock check: which products need reordering, and how many to order."
+ },
+ "plan": {
+  "view": "walkthrough",
+  "mode": "run",
+  "focus": "whole program",
+  "max_steps": 150,
+  "steps": [
+   {
+    "type": "group",
+    "file": "reorder.py",
+    "lines": [
+     2,
+     5
+    ],
+    "call": 1,
+    "depth": 0,
+    "executions": 1,
+    "stmts": [
+     "reorder.py:2",
+     "reorder.py:3",
+     "reorder.py:4",
+     "reorder.py:5"
+    ],
+    "id": "s1"
+   },
+   {
+    "type": "group",
+    "file": "reorder.py",
+    "lines": [
+     7,
+     10
+    ],
+    "call": 1,
+    "depth": 0,
+    "executions": 1,
+    "changes": {
+     "STOCK_CSV": {
+      "type": "str",
+      "len": 14,
+      "value": "data/stock.csv"
+     },
+     "OUT_JSON": {
+      "type": "str",
+      "len": 11,
+      "value": "orders.json"
+     },
+     "SAFETY_DAYS": {
+      "type": "int",
+      "value": "7"
+     },
+     "MIN_ORDER": {
+      "type": "int",
+      "value": "10"
+     }
+    },
+    "stmts": [
+     "reorder.py:7",
+     "reorder.py:8",
+     "reorder.py:9",
+     "reorder.py:10"
+    ],
+    "id": "s2"
+   },
+   {
+    "type": "group",
+    "file": "reorder.py",
+    "lines": [
+     13,
+     41
+    ],
+    "call": 1,
+    "depth": 0,
+    "executions": 2,
+    "stmts": [
+     "reorder.py:13",
+     "reorder.py:21",
+     "reorder.py:26",
+     "reorder.py:32",
+     "reorder.py:41"
+    ],
+    "id": "s3"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:49",
+    "file": "reorder.py",
+    "lines": [
+     49,
+     49
+    ],
+    "call": 1,
+    "depth": 0,
+    "occurrence": 1,
+    "executions": 1,
+    "branch": {
+     "taken": "body"
+    },
+    "id": "s4"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:50",
+    "file": "reorder.py",
+    "lines": [
+     50,
+     50
+    ],
+    "call": 1,
+    "depth": 0,
+    "occurrence": 1,
+    "executions": 1,
+    "id": "s5"
+   },
+   {
+    "type": "enter",
+    "fn": "reorder:main",
+    "call": 3,
+    "depth": 1,
+    "caller": "reorder:<module>",
+    "from_step": "s5",
+    "args": {
+     "path": {
+      "type": "str",
+      "len": 14,
+      "value": "data/stock.csv"
+     }
+    },
+    "id": "s6"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:42",
+    "file": "reorder.py",
+    "lines": [
+     42,
+     42
+    ],
+    "call": 3,
+    "depth": 1,
+    "occurrence": 1,
+    "executions": 1,
+    "id": "s7"
+   },
+   {
+    "type": "enter",
+    "fn": "reorder:load",
+    "call": 4,
+    "depth": 2,
+    "caller": "reorder:main",
+    "from_step": "s7",
+    "args": {
+     "path": {
+      "type": "str",
+      "len": 14,
+      "value": "data/stock.csv"
+     }
+    },
+    "id": "s8"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:22",
+    "file": "reorder.py",
+    "lines": [
+     22,
+     22
+    ],
+    "call": 4,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 2,
+    "changes": {
+     "fh": {
+      "type": "_io.TextIOWrapper",
+      "attrs": [
+       "mode"
+      ]
+     }
+    },
+    "io": [
+     {
+      "seq": 1,
+      "kind": "file",
+      "op": "read",
+      "target": "data/stock.csv",
+      "count": 1
+     }
+    ],
+    "id": "s9"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:23",
+    "file": "reorder.py",
+    "lines": [
+     23,
+     23
+    ],
+    "call": 4,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 1,
+    "value": {
+     "type": "list",
+     "len": 40,
+     "sample": [
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-100"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "159"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "5.5"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 8,
+         "value": "Borealis"
+        }
+       }
+      },
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-101"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "176"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "18.9"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 6,
+         "value": "Cobalt"
+        }
+       }
+      },
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-102"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "166"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "18.5"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 4,
+         "value": "Acme"
+        }
+       }
+      }
+     ]
+    },
+    "id": "s10"
+   },
+   {
+    "type": "return",
+    "fn": "reorder:load",
+    "call": 4,
+    "depth": 2,
+    "to": "reorder:main",
+    "to_step": "s7",
+    "value": {
+     "type": "list",
+     "len": 40,
+     "sample": [
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-100"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "159"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "5.5"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 8,
+         "value": "Borealis"
+        }
+       }
+      },
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-101"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "176"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "18.9"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 6,
+         "value": "Cobalt"
+        }
+       }
+      },
+      {
+       "type": "Item",
+       "fields": [
+        "sku",
+        "on_hand",
+        "daily_sales",
+        "supplier"
+       ],
+       "values": {
+        "sku": {
+         "type": "str",
+         "len": 7,
+         "value": "SKU-102"
+        },
+        "on_hand": {
+         "type": "int",
+         "value": "166"
+        },
+        "daily_sales": {
+         "type": "float",
+         "value": "18.5"
+        },
+        "supplier": {
+         "type": "str",
+         "len": 4,
+         "value": "Acme"
+        }
+       }
+      }
+     ]
+    },
+    "changes": {
+     "items": {
+      "type": "list",
+      "len": 40,
+      "sample": [
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-100"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "159"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "5.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 8,
+          "value": "Borealis"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-101"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "176"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.9"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 6,
+          "value": "Cobalt"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-102"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "166"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 4,
+          "value": "Acme"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "changes_of": "s7",
+    "id": "s11"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:43",
+    "file": "reorder.py",
+    "lines": [
+     43,
+     43
+    ],
+    "call": 3,
+    "depth": 1,
+    "occurrence": 1,
+    "executions": 1,
+    "id": "s12"
+   },
+   {
+    "type": "enter",
+    "fn": "reorder:plan_orders",
+    "call": 5,
+    "depth": 2,
+    "caller": "reorder:main",
+    "from_step": "s12",
+    "args": {
+     "items": {
+      "type": "list",
+      "len": 40,
+      "sample": [
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-100"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "159"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "5.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 8,
+          "value": "Borealis"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-101"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "176"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.9"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 6,
+          "value": "Cobalt"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-102"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "166"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 4,
+          "value": "Acme"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "id": "s13"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:33",
+    "file": "reorder.py",
+    "lines": [
+     33,
+     33
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 0,
+      "keys": [],
+      "values": {}
+     }
+    },
+    "id": "s14"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:34",
+    "file": "reorder.py",
+    "lines": [
+     34,
+     34
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 41,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-100"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "159"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "5.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     }
+    },
+    "loop": {
+     "iterations": 40
+    },
+    "id": "s15"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:35",
+    "file": "reorder.py",
+    "lines": [
+     35,
+     35
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 40,
+    "id": "s16"
+   },
+   {
+    "type": "enter",
+    "fn": "reorder:needed",
+    "call": 6,
+    "depth": 3,
+    "caller": "reorder:plan_orders",
+    "from_step": "s16",
+    "args": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-100"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "159"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "5.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     }
+    },
+    "id": "s17"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:27",
+    "file": "reorder.py",
+    "lines": [
+     27,
+     27
+    ],
+    "call": 6,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "target": {
+      "type": "float",
+      "value": "38.5"
+     }
+    },
+    "id": "s18"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:28",
+    "file": "reorder.py",
+    "lines": [
+     28,
+     28
+    ],
+    "call": 6,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "short": {
+      "type": "float",
+      "value": "-120.5"
+     }
+    },
+    "id": "s19"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:29",
+    "file": "reorder.py",
+    "lines": [
+     29,
+     29
+    ],
+    "call": 6,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "value": {
+     "type": "int",
+     "value": "0"
+    },
+    "id": "s20"
+   },
+   {
+    "type": "return",
+    "fn": "reorder:needed",
+    "call": 6,
+    "depth": 3,
+    "to": "reorder:plan_orders",
+    "to_step": "s16",
+    "value": {
+     "type": "int",
+     "value": "0"
+    },
+    "changes": {
+     "qty": {
+      "type": "int",
+      "value": "0"
+     }
+    },
+    "changes_of": "s16",
+    "id": "s21"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:36",
+    "file": "reorder.py",
+    "lines": [
+     36,
+     36
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 40,
+    "branch": {
+     "taken": "none"
+    },
+    "id": "s22"
+   },
+   {
+    "type": "loop_summary",
+    "stmt": "reorder.py:34",
+    "file": "reorder.py",
+    "lines": [
+     34,
+     34
+    ],
+    "call": 5,
+    "depth": 2,
+    "iterations": 40,
+    "detailed_iterations": 3,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-139"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "23"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "6.6"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     },
+     "qty": {
+      "type": "int",
+      "value": "23"
+     },
+     "orders": {
+      "type": "dict",
+      "len": 3,
+      "keys": [
+       "Acme",
+       "Borealis",
+       "Cobalt"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 6,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Borealis": {
+        "type": "list",
+        "len": 8,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Cobalt": {
+        "type": "list",
+        "len": 2,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    "id": "s23"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:34",
+    "file": "reorder.py",
+    "lines": [
+     34,
+     34
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 2,
+    "executions": 41,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-101"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "176"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.9"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 6,
+        "value": "Cobalt"
+       }
+      }
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s24"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:35",
+    "file": "reorder.py",
+    "lines": [
+     35,
+     35
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 2,
+    "executions": 40,
+    "hidden_by": "s23",
+    "id": "s25"
+   },
+   {
+    "type": "enter",
+    "fn": "reorder:needed",
+    "call": 7,
+    "depth": 3,
+    "caller": "reorder:plan_orders",
+    "from_step": "s25",
+    "args": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-101"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "176"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.9"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 6,
+        "value": "Cobalt"
+       }
+      }
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s26"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:27",
+    "file": "reorder.py",
+    "lines": [
+     27,
+     27
+    ],
+    "call": 7,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "target": {
+      "type": "float",
+      "value": "132.29999999999998"
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s27"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:28",
+    "file": "reorder.py",
+    "lines": [
+     28,
+     28
+    ],
+    "call": 7,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "short": {
+      "type": "float",
+      "value": "-43.70000000000002"
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s28"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:29",
+    "file": "reorder.py",
+    "lines": [
+     29,
+     29
+    ],
+    "call": 7,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "value": {
+     "type": "int",
+     "value": "0"
+    },
+    "hidden_by": "s23",
+    "id": "s29"
+   },
+   {
+    "type": "return",
+    "fn": "reorder:needed",
+    "call": 7,
+    "depth": 3,
+    "to": "reorder:plan_orders",
+    "to_step": "s25",
+    "value": {
+     "type": "int",
+     "value": "0"
+    },
+    "hidden_by": "s23",
+    "id": "s30"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:36",
+    "file": "reorder.py",
+    "lines": [
+     36,
+     36
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 2,
+    "executions": 40,
+    "branch": {
+     "taken": "none"
+    },
+    "hidden_by": "s23",
+    "id": "s31"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:34",
+    "file": "reorder.py",
+    "lines": [
+     34,
+     34
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 3,
+    "executions": 41,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-102"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "166"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s32"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:35",
+    "file": "reorder.py",
+    "lines": [
+     35,
+     35
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 3,
+    "executions": 40,
+    "hidden_by": "s23",
+    "id": "s33"
+   },
+   {
+    "type": "enter",
+    "fn": "reorder:needed",
+    "call": 8,
+    "depth": 3,
+    "caller": "reorder:plan_orders",
+    "from_step": "s33",
+    "args": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-102"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "166"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s34"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:27",
+    "file": "reorder.py",
+    "lines": [
+     27,
+     27
+    ],
+    "call": 8,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "target": {
+      "type": "float",
+      "value": "129.5"
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s35"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:28",
+    "file": "reorder.py",
+    "lines": [
+     28,
+     28
+    ],
+    "call": 8,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "changes": {
+     "short": {
+      "type": "float",
+      "value": "-36.5"
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s36"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:29",
+    "file": "reorder.py",
+    "lines": [
+     29,
+     29
+    ],
+    "call": 8,
+    "depth": 3,
+    "occurrence": 1,
+    "executions": 1,
+    "value": {
+     "type": "int",
+     "value": "0"
+    },
+    "hidden_by": "s23",
+    "id": "s37"
+   },
+   {
+    "type": "return",
+    "fn": "reorder:needed",
+    "call": 8,
+    "depth": 3,
+    "to": "reorder:plan_orders",
+    "to_step": "s33",
+    "value": {
+     "type": "int",
+     "value": "0"
+    },
+    "hidden_by": "s23",
+    "id": "s38"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:36",
+    "file": "reorder.py",
+    "lines": [
+     36,
+     36
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 3,
+    "executions": 40,
+    "branch": {
+     "taken": "body"
+    },
+    "hidden_by": "s23",
+    "id": "s39"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:37",
+    "file": "reorder.py",
+    "lines": [
+     37,
+     37
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 16,
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 2,
+      "keys": [
+       "Acme",
+       "Borealis"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 2,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Borealis": {
+        "type": "list",
+        "len": 1,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    "changes_unrecorded": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-105"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "28"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "7.7"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     },
+     "qty": {
+      "type": "int",
+      "value": "26"
+     }
+    },
+    "hidden_by": "s23",
+    "id": "s40"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:38",
+    "file": "reorder.py",
+    "lines": [
+     38,
+     38
+    ],
+    "call": 5,
+    "depth": 2,
+    "occurrence": 1,
+    "executions": 1,
+    "value": {
+     "type": "dict",
+     "len": 3,
+     "keys": [
+      "Acme",
+      "Borealis",
+      "Cobalt"
+     ],
+     "values": {
+      "Acme": {
+       "type": "list",
+       "len": 6,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      },
+      "Borealis": {
+       "type": "list",
+       "len": 8,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      },
+      "Cobalt": {
+       "type": "list",
+       "len": 2,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      }
+     }
+    },
+    "id": "s41"
+   },
+   {
+    "type": "return",
+    "fn": "reorder:plan_orders",
+    "call": 5,
+    "depth": 2,
+    "to": "reorder:main",
+    "to_step": "s12",
+    "value": {
+     "type": "dict",
+     "len": 3,
+     "keys": [
+      "Acme",
+      "Borealis",
+      "Cobalt"
+     ],
+     "values": {
+      "Acme": {
+       "type": "list",
+       "len": 6,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      },
+      "Borealis": {
+       "type": "list",
+       "len": 8,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      },
+      "Cobalt": {
+       "type": "list",
+       "len": 2,
+       "sample": [
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        },
+        {
+         "type": "dict",
+         "len": 2,
+         "keys": [
+          "sku",
+          "qty"
+         ]
+        }
+       ]
+      }
+     }
+    },
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 3,
+      "keys": [
+       "Acme",
+       "Borealis",
+       "Cobalt"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 6,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Borealis": {
+        "type": "list",
+        "len": 8,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Cobalt": {
+        "type": "list",
+        "len": 2,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    "changes_of": "s12",
+    "id": "s42"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:44",
+    "file": "reorder.py",
+    "lines": [
+     44,
+     44
+    ],
+    "call": 3,
+    "depth": 1,
+    "occurrence": 1,
+    "executions": 2,
+    "changes": {
+     "fh": {
+      "type": "_io.TextIOWrapper",
+      "attrs": [
+       "mode"
+      ]
+     }
+    },
+    "io": [
+     {
+      "seq": 2,
+      "kind": "file",
+      "op": "write",
+      "target": "orders.json",
+      "handled": "redirected",
+      "count": 1
+     }
+    ],
+    "id": "s43"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:45",
+    "file": "reorder.py",
+    "lines": [
+     45,
+     45
+    ],
+    "call": 3,
+    "depth": 1,
+    "occurrence": 1,
+    "executions": 1,
+    "id": "s44"
+   },
+   {
+    "type": "statement",
+    "stmt": "reorder.py:46",
+    "file": "reorder.py",
+    "lines": [
+     46,
+     46
+    ],
+    "call": 3,
+    "depth": 1,
+    "occurrence": 1,
+    "executions": 1,
+    "id": "s45"
+   },
+   {
+    "type": "return",
+    "fn": "reorder:main",
+    "call": 3,
+    "depth": 1,
+    "value": {
+     "type": "NoneType",
+     "value": "None"
+    },
+    "to": "reorder:<module>",
+    "to_step": "s5",
+    "id": "s46"
+   }
+  ],
+  "explain_first": [
+   "reorder.py:34",
+   "reorder.py:49",
+   "reorder.py:50",
+   "reorder.py:42",
+   "reorder.py:22",
+   "reorder.py:23",
+   "reorder.py:43",
+   "reorder.py:35",
+   "reorder.py:36",
+   "reorder.py:44",
+   "reorder.py:45",
+   "reorder.py:29",
+   "reorder.py:38",
+   "reorder.py:33",
+   "reorder.py:27",
+   "reorder.py:28",
+   "reorder.py:2",
+   "reorder.py:3",
+   "reorder.py:4",
+   "reorder.py:5",
+   "reorder.py:7",
+   "reorder.py:8",
+   "reorder.py:9",
+   "reorder.py:10",
+   "reorder.py:13",
+   "reorder.py:21",
+   "reorder.py:26",
+   "reorder.py:32",
+   "reorder.py:41",
+   "reorder.py:46"
+  ],
+  "truncated": false,
+  "counts": {
+   "steps": 46,
+   "visible_steps": 29,
+   "statements": 31
+  },
+  "line_stats": {
+   "recorded": 51,
+   "counted_only": 236,
+   "max_events": 20000
+  },
+  "lines_truncated": false
+ },
+ "lines": {
+  "events": [
+   {
+    "seq": 1,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 1,
+    "occ": 1,
+    "t_ms": 4.204
+   },
+   {
+    "seq": 2,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 2,
+    "occ": 1,
+    "t_ms": 4.242
+   },
+   {
+    "seq": 3,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 3,
+    "occ": 1,
+    "t_ms": 5.56
+   },
+   {
+    "seq": 4,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 4,
+    "occ": 1,
+    "t_ms": 5.578
+   },
+   {
+    "seq": 5,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 5,
+    "occ": 1,
+    "t_ms": 5.588
+   },
+   {
+    "seq": 6,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 7,
+    "occ": 1,
+    "t_ms": 10.485,
+    "changes": {
+     "STOCK_CSV": {
+      "type": "str",
+      "len": 14,
+      "value": "data/stock.csv"
+     }
+    }
+   },
+   {
+    "seq": 7,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 8,
+    "occ": 1,
+    "t_ms": 10.591,
+    "changes": {
+     "OUT_JSON": {
+      "type": "str",
+      "len": 11,
+      "value": "orders.json"
+     }
+    }
+   },
+   {
+    "seq": 8,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 9,
+    "occ": 1,
+    "t_ms": 10.648,
+    "changes": {
+     "SAFETY_DAYS": {
+      "type": "int",
+      "value": "7"
+     }
+    }
+   },
+   {
+    "seq": 9,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 10,
+    "occ": 1,
+    "t_ms": 10.674,
+    "changes": {
+     "MIN_ORDER": {
+      "type": "int",
+      "value": "10"
+     }
+    }
+   },
+   {
+    "seq": 10,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 13,
+    "occ": 1,
+    "t_ms": 10.693
+   },
+   {
+    "seq": 11,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 14,
+    "occ": 1,
+    "t_ms": 10.708
+   },
+   {
+    "seq": 12,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 13,
+    "occ": 2,
+    "t_ms": 10.815
+   },
+   {
+    "seq": 13,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 14,
+    "occ": 2,
+    "t_ms": 12.355
+   },
+   {
+    "seq": 14,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 21,
+    "occ": 1,
+    "t_ms": 12.377
+   },
+   {
+    "seq": 15,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 26,
+    "occ": 1,
+    "t_ms": 12.392
+   },
+   {
+    "seq": 16,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 32,
+    "occ": 1,
+    "t_ms": 12.409
+   },
+   {
+    "seq": 17,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 41,
+    "occ": 1,
+    "t_ms": 12.433
+   },
+   {
+    "seq": 18,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 49,
+    "occ": 1,
+    "t_ms": 12.447
+   },
+   {
+    "seq": 19,
+    "node": 1,
+    "file": "reorder.py",
+    "line": 50,
+    "occ": 1,
+    "t_ms": 12.459
+   },
+   {
+    "seq": 20,
+    "node": 3,
+    "file": "reorder.py",
+    "line": 42,
+    "occ": 1,
+    "t_ms": 12.566,
+    "changes": {
+     "items": {
+      "type": "list",
+      "len": 40,
+      "sample": [
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-100"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "159"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "5.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 8,
+          "value": "Borealis"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-101"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "176"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.9"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 6,
+          "value": "Cobalt"
+         }
+        }
+       },
+       {
+        "type": "Item",
+        "fields": [
+         "sku",
+         "on_hand",
+         "daily_sales",
+         "supplier"
+        ],
+        "values": {
+         "sku": {
+          "type": "str",
+          "len": 7,
+          "value": "SKU-102"
+         },
+         "on_hand": {
+          "type": "int",
+          "value": "166"
+         },
+         "daily_sales": {
+          "type": "float",
+          "value": "18.5"
+         },
+         "supplier": {
+          "type": "str",
+          "len": 4,
+          "value": "Acme"
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "seq": 21,
+    "node": 4,
+    "file": "reorder.py",
+    "line": 22,
+    "occ": 1,
+    "t_ms": 12.637,
+    "changes": {
+     "fh": {
+      "type": "_io.TextIOWrapper",
+      "attrs": [
+       "mode"
+      ]
+     }
+    }
+   },
+   {
+    "seq": 22,
+    "node": 4,
+    "file": "reorder.py",
+    "line": 23,
+    "occ": 1,
+    "t_ms": 12.945
+   },
+   {
+    "seq": 23,
+    "node": 4,
+    "file": "reorder.py",
+    "line": 22,
+    "occ": 2,
+    "t_ms": 13.327
+   },
+   {
+    "seq": 24,
+    "node": 3,
+    "file": "reorder.py",
+    "line": 43,
+    "occ": 1,
+    "t_ms": 13.545,
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 3,
+      "keys": [
+       "Acme",
+       "Borealis",
+       "Cobalt"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 6,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Borealis": {
+        "type": "list",
+        "len": 8,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Cobalt": {
+        "type": "list",
+        "len": 2,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   {
+    "seq": 25,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 33,
+    "occ": 1,
+    "t_ms": 13.704,
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 0,
+      "keys": [],
+      "values": {}
+     }
+    }
+   },
+   {
+    "seq": 26,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 34,
+    "occ": 1,
+    "t_ms": 13.729,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-100"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "159"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "5.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     }
+    }
+   },
+   {
+    "seq": 27,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 35,
+    "occ": 1,
+    "t_ms": 13.759,
+    "changes": {
+     "qty": {
+      "type": "int",
+      "value": "0"
+     }
+    }
+   },
+   {
+    "seq": 28,
+    "node": 6,
+    "file": "reorder.py",
+    "line": 27,
+    "occ": 1,
+    "t_ms": 13.808,
+    "changes": {
+     "target": {
+      "type": "float",
+      "value": "38.5"
+     }
+    }
+   },
+   {
+    "seq": 29,
+    "node": 6,
+    "file": "reorder.py",
+    "line": 28,
+    "occ": 1,
+    "t_ms": 13.825,
+    "changes": {
+     "short": {
+      "type": "float",
+      "value": "-120.5"
+     }
+    }
+   },
+   {
+    "seq": 30,
+    "node": 6,
+    "file": "reorder.py",
+    "line": 29,
+    "occ": 1,
+    "t_ms": 13.838
+   },
+   {
+    "seq": 31,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 36,
+    "occ": 1,
+    "t_ms": 13.873
+   },
+   {
+    "seq": 32,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 34,
+    "occ": 2,
+    "t_ms": 13.885,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-101"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "176"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.9"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 6,
+        "value": "Cobalt"
+       }
+      }
+     }
+    }
+   },
+   {
+    "seq": 33,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 35,
+    "occ": 2,
+    "t_ms": 13.95
+   },
+   {
+    "seq": 34,
+    "node": 7,
+    "file": "reorder.py",
+    "line": 27,
+    "occ": 1,
+    "t_ms": 13.983,
+    "changes": {
+     "target": {
+      "type": "float",
+      "value": "132.29999999999998"
+     }
+    }
+   },
+   {
+    "seq": 35,
+    "node": 7,
+    "file": "reorder.py",
+    "line": 28,
+    "occ": 1,
+    "t_ms": 13.999,
+    "changes": {
+     "short": {
+      "type": "float",
+      "value": "-43.70000000000002"
+     }
+    }
+   },
+   {
+    "seq": 36,
+    "node": 7,
+    "file": "reorder.py",
+    "line": 29,
+    "occ": 1,
+    "t_ms": 14.015
+   },
+   {
+    "seq": 37,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 36,
+    "occ": 2,
+    "t_ms": 14.041
+   },
+   {
+    "seq": 38,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 34,
+    "occ": 3,
+    "t_ms": 14.051,
+    "changes": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-102"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "166"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "18.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     }
+    }
+   },
+   {
+    "seq": 39,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 35,
+    "occ": 3,
+    "t_ms": 14.079
+   },
+   {
+    "seq": 40,
+    "node": 8,
+    "file": "reorder.py",
+    "line": 27,
+    "occ": 1,
+    "t_ms": 14.112,
+    "changes": {
+     "target": {
+      "type": "float",
+      "value": "129.5"
+     }
+    }
+   },
+   {
+    "seq": 41,
+    "node": 8,
+    "file": "reorder.py",
+    "line": 28,
+    "occ": 1,
+    "t_ms": 14.127,
+    "changes": {
+     "short": {
+      "type": "float",
+      "value": "-36.5"
+     }
+    }
+   },
+   {
+    "seq": 42,
+    "node": 8,
+    "file": "reorder.py",
+    "line": 29,
+    "occ": 1,
+    "t_ms": 14.14
+   },
+   {
+    "seq": 43,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 36,
+    "occ": 3,
+    "t_ms": 14.163
+   },
+   {
+    "seq": 44,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 37,
+    "occ": 1,
+    "t_ms": 14.252,
+    "changes_unrecorded": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-105"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "28"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "7.7"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     },
+     "qty": {
+      "type": "int",
+      "value": "26"
+     }
+    },
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 1,
+      "keys": [
+       "Acme"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 1,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   {
+    "seq": 45,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 37,
+    "occ": 2,
+    "t_ms": 14.479,
+    "changes_unrecorded": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-109"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "40"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "15.4"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 4,
+        "value": "Acme"
+       }
+      }
+     },
+     "qty": {
+      "type": "int",
+      "value": "68"
+     }
+    }
+   },
+   {
+    "seq": 46,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 37,
+    "occ": 3,
+    "t_ms": 14.553,
+    "changes_unrecorded": {
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-110"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "35"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "12.5"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     },
+     "qty": {
+      "type": "int",
+      "value": "52"
+     }
+    },
+    "changes": {
+     "orders": {
+      "type": "dict",
+      "len": 2,
+      "keys": [
+       "Acme",
+       "Borealis"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 2,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Borealis": {
+        "type": "list",
+        "len": 1,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   {
+    "seq": 47,
+    "node": 5,
+    "file": "reorder.py",
+    "line": 38,
+    "occ": 1,
+    "t_ms": 15.294,
+    "changes_unrecorded": {
+     "orders": {
+      "type": "dict",
+      "len": 3,
+      "keys": [
+       "Acme",
+       "Borealis",
+       "Cobalt"
+      ],
+      "values": {
+       "Acme": {
+        "type": "list",
+        "len": 6,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Borealis": {
+        "type": "list",
+        "len": 8,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       },
+       "Cobalt": {
+        "type": "list",
+        "len": 2,
+        "sample": [
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         },
+         {
+          "type": "dict",
+          "len": 2,
+          "keys": [
+           "sku",
+           "qty"
+          ]
+         }
+        ]
+       }
+      }
+     },
+     "item": {
+      "type": "Item",
+      "fields": [
+       "sku",
+       "on_hand",
+       "daily_sales",
+       "supplier"
+      ],
+      "values": {
+       "sku": {
+        "type": "str",
+        "len": 7,
+        "value": "SKU-139"
+       },
+       "on_hand": {
+        "type": "int",
+        "value": "23"
+       },
+       "daily_sales": {
+        "type": "float",
+        "value": "6.6"
+       },
+       "supplier": {
+        "type": "str",
+        "len": 8,
+        "value": "Borealis"
+       }
+      }
+     },
+     "qty": {
+      "type": "int",
+      "value": "23"
+     }
+    }
+   },
+   {
+    "seq": 48,
+    "node": 3,
+    "file": "reorder.py",
+    "line": 44,
+    "occ": 1,
+    "t_ms": 15.677,
+    "changes": {
+     "fh": {
+      "type": "_io.TextIOWrapper",
+      "attrs": [
+       "mode"
+      ]
+     }
+    }
+   },
+   {
+    "seq": 49,
+    "node": 3,
+    "file": "reorder.py",
+    "line": 45,
+    "occ": 1,
+    "t_ms": 16.888
+   },
+   {
+    "seq": 50,
+    "node": 3,
+    "file": "reorder.py",
+    "line": 44,
+    "occ": 2,
+    "t_ms": 17.357
+   },
+   {
+    "seq": 51,
+    "node": 3,
+    "file": "reorder.py",
+    "line": 46,
+    "occ": 1,
+    "t_ms": 17.443
+   }
+  ],
+  "totals": [
+   {
+    "file": "reorder.py",
+    "line": 1,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 2,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 3,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 4,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 5,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 7,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 8,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 9,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 10,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 13,
+    "count": 2
+   },
+   {
+    "file": "reorder.py",
+    "line": 14,
+    "count": 2
+   },
+   {
+    "file": "reorder.py",
+    "line": 21,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 22,
+    "count": 2
+   },
+   {
+    "file": "reorder.py",
+    "line": 23,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 26,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 27,
+    "count": 40
+   },
+   {
+    "file": "reorder.py",
+    "line": 28,
+    "count": 40
+   },
+   {
+    "file": "reorder.py",
+    "line": 29,
+    "count": 40
+   },
+   {
+    "file": "reorder.py",
+    "line": 32,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 33,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 34,
+    "count": 41
+   },
+   {
+    "file": "reorder.py",
+    "line": 35,
+    "count": 40
+   },
+   {
+    "file": "reorder.py",
+    "line": 36,
+    "count": 40
+   },
+   {
+    "file": "reorder.py",
+    "line": 37,
+    "count": 16
+   },
+   {
+    "file": "reorder.py",
+    "line": 38,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 41,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 42,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 43,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 44,
+    "count": 2
+   },
+   {
+    "file": "reorder.py",
+    "line": 45,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 46,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 49,
+    "count": 1
+   },
+   {
+    "file": "reorder.py",
+    "line": 50,
+    "count": 1
+   }
+  ],
+  "stats": {
+   "recorded": 51,
+   "counted_only": 236,
+   "max_events": 20000
+  },
+  "truncated": false,
+  "note": "The first 3 executions of each line in each call are recorded with the variables they changed; later executions are counted. In-place changes that keep a value's identity, type and size are not detected."
+ }
+}

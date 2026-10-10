@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily weather pipeline, line by line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #E7ECEF; --panel: #FBFCFD; --panel-2: #F1F4F6; --ink: #17212B; --muted: #5D6A78; --rule: #C5CFD8;
+  --blue: #2F64D6; --violet: #8A3FB3; --teal: #0E8A8A; --green: #23924A; --amber: #C97700; --red: #D23C34; --slate: #56657A;
+  --hl: rgba(201,119,0,.14); --hl-edge: #C97700; --token-ink: #FFFFFF;
+  --k-kw: #2F64D6; --k-str: #23924A; --k-num: #B4471F; --k-com: #7A8794; --k-fn: #9A5B00; --k-bi: #8A3FB3; --k-dec: #0E8A8A;
+  --sans: "Overpass", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Overpass Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --lh: 22px;
+  box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground: #0F151B; --panel: #172029; --panel-2: #1D2833; --ink: #E3E9EF; --muted: #8F9CAA; --rule: #2B3845;
+  --blue: #6F98F2; --violet: #B57CD9; --teal: #3CC2C0; --green: #4CC777; --amber: #F2A73B; --red: #F06A5F; --slate: #8796AA;
+  --hl: rgba(242,167,59,.15); --hl-edge: #F2A73B; --token-ink: #0F151B;
+  --k-kw: #7FA5F5; --k-str: #6FD08F; --k-num: #F08A6B; --k-com: #7E8C9A; --k-fn: #F2B95B; --k-bi: #C79BE6; --k-dec: #4FCFCB; } }
+:root[data-theme="dark"] {
+  --ground: #0F151B; --panel: #172029; --panel-2: #1D2833; --ink: #E3E9EF; --muted: #8F9CAA; --rule: #2B3845;
+  --blue: #6F98F2; --violet: #B57CD9; --teal: #3CC2C0; --green: #4CC777; --amber: #F2A73B; --red: #F06A5F; --slate: #8796AA;
+  --hl: rgba(242,167,59,.15); --hl-edge: #F2A73B; --token-ink: #0F151B;
+  --k-kw: #7FA5F5; --k-str: #6FD08F; --k-num: #F08A6B; --k-com: #7E8C9A; --k-fn: #F2B95B; --k-bi: #C79BE6; --k-dec: #4FCFCB; }
+*, *::before, *::after { box-sizing: inherit; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+code { font-family: var(--mono); font-size: .92em; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
+  max-width: 1480px; margin: 0 auto; padding: 0 18px; }
+.app > * { min-width: 0; }
+.mast { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 0 8px; }
+.mast h1 { margin: 0; font-size: clamp(19px, 2.2vw, 25px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+.mast p { margin: 3px 0 0; color: var(--muted); font-size: 14.5px; max-width: 80ch; }
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--rule);
+  background: var(--panel); font-size: 13.5px; white-space: nowrap; }
+.badge i { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.badge.err i { background: var(--red); }
+.badge.scan i { background: transparent; border: 2px solid var(--muted); }
+
+/* call stack */
+.crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; padding: 2px 0 8px; font-size: 13.5px; min-height: 32px; scrollbar-width: thin; }
+.crumb { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; background: var(--panel); border: 1.5px solid var(--rule);
+  font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.crumb.top { border-color: var(--hl-edge); }
+.crumb.err { border-color: var(--red); color: var(--red); }
+.crumbs .sep { color: var(--muted); }
+.crumbs .lbl { color: var(--muted); margin-right: 4px; font-family: var(--sans); }
+
+/* main */
+.main { position: relative; display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(330px, 1fr); gap: 14px; min-height: 0; }
+.codepanel, .side { background: var(--panel); border: 1.5px solid var(--rule); border-radius: 12px; min-height: 0; }
+.codepanel { display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
+.tabs { display: flex; gap: 2px; padding: 6px 6px 0; overflow-x: auto; border-bottom: 1.5px solid var(--rule); scrollbar-width: thin; }
+.tab { border: 0; background: transparent; padding: 7px 12px 6px; border-radius: 8px 8px 0 0; font-family: var(--mono); font-size: 12.5px;
+  color: var(--muted); cursor: pointer; white-space: nowrap; border-bottom: 2.5px solid transparent; }
+.tab.on { color: var(--ink); background: var(--panel-2); border-bottom-color: var(--hl-edge); }
+.tab:hover { color: var(--ink); }
+.peekbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; font-size: 13.5px;
+  background: color-mix(in srgb, var(--blue) 12%, var(--panel)); border-bottom: 1.5px solid var(--rule); }
+.peekbar[hidden] { display: none; }
+.peekbar button { border: 1.5px solid var(--rule); background: var(--panel); border-radius: 999px; padding: 3px 12px; cursor: pointer; font-size: 13px; }
+.codewrap { position: relative; overflow: auto; min-height: 0; scrollbar-width: thin; }
+.content { position: relative; padding: 10px 0 40vh; min-width: max-content; }
+.code { position: relative; z-index: 1; font-family: var(--mono); font-size: 13px; line-height: var(--lh); }
+.ln { display: flex; height: var(--lh); white-space: pre; padding-right: 220px; position: relative; transition: none; }
+.ln .no { flex: none; width: 3.6em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+.ln .tx { flex: none; }
+.ln.dim { opacity: .38; }
+.ln.maybe::before { content: ""; position: absolute; left: 3.1em; top: 0; bottom: 0; width: 2px; border-left: 2px dashed var(--muted); }
+.ln.raise .tx { text-decoration: underline wavy var(--red); text-underline-offset: 4px; }
+.hl { position: absolute; left: 0; right: 0; top: 10px; height: var(--lh); background: var(--hl); box-shadow: inset 4px 0 0 var(--hl-edge); z-index: 0; pointer-events: none; }
+.hl.err { background: color-mix(in srgb, var(--red) 16%, transparent); box-shadow: inset 4px 0 0 var(--red); }
+.badges { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.bdg { position: absolute; height: 20px; line-height: 20px; padding: 0 9px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+  background: var(--panel); border: 1.5px solid var(--rule); color: var(--ink); max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+.bdg.t { border-color: var(--green); color: var(--green); font-weight: 600; }
+.bdg.f { border-color: var(--slate); color: var(--slate); font-weight: 600; }
+.bdg.p { border-style: dashed; color: var(--muted); }
+.bdg.x { border-color: var(--red); color: var(--red); font-weight: 600; }
+.bdg.lib { border-color: var(--violet); color: var(--violet); }
+.bdg.io { border-color: var(--teal); color: var(--teal); }
+.bdg.loop { border-color: var(--amber); color: var(--amber); font-weight: 600; }
+/* syntax */
+.kw { color: var(--k-kw); } .st { color: var(--k-str); } .nu { color: var(--k-num); } .cm { color: var(--k-com); font-style: italic; }
+.fnn { color: var(--k-fn); font-weight: 600; } .bi { color: var(--k-bi); } .dc { color: var(--k-dec); }
+.id[data-go] { cursor: pointer; text-decoration: underline dotted color-mix(in srgb, var(--muted) 60%, transparent); text-underline-offset: 3px; }
+.id[data-go]:hover { text-decoration-color: var(--ink); }
+
+/* side panel */
+.side { overflow: auto; padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: thin; }
+.shead .kind { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--k); }
+.shead .kind i { width: 16px; height: 5px; border-radius: 3px; background: var(--k); }
+.shead h2 { margin: 4px 0 2px; font-size: 21px; line-height: 1.2; font-weight: 800; letter-spacing: -0.01em; }
+.shead .where { color: var(--muted); font-size: 13.5px; }
+.expl p { margin: 0; font-size: 15.5px; line-height: 1.55; max-width: 62ch; }
+.expl .none { color: var(--muted); font-size: 13.5px; }
+.note { border-left: 3px solid var(--blue); padding-left: 10px; font-size: 14px; }
+.sec h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.sec h3 small { font-weight: 400; }
+.vars { display: grid; gap: 6px; }
+.var { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: baseline; padding: 8px 10px;
+  background: var(--panel-2); border-radius: 8px; }
+.var .n { font-family: var(--mono); font-weight: 600; font-size: 13.5px; }
+.var .v { font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.var .v .num { font-weight: 700; }
+.var .d { font-weight: 600; font-size: 12.5px; margin-left: 6px; color: var(--amber); }
+.var .tag { font-size: 12px; color: var(--muted); }
+.var .pulse { position: absolute; inset: -2px; border-radius: 10px; border: 2px solid var(--hl-edge); opacity: 0; pointer-events: none; }
+.var .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.var .bar b { display: block; height: 100%; background: var(--hl-edge); }
+.mini { grid-column: 1 / -1; overflow-x: auto; }
+.mini table { border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+.mini th, .mini td { padding: 2px 10px 2px 0; text-align: left; white-space: nowrap; max-width: 14em; overflow: hidden; text-overflow: ellipsis; }
+.mini th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--rule); }
+.mini .new { color: var(--hl-edge); }
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; font-size: 13.5px; }
+.facts dt { font-family: var(--mono); font-size: 12.5px; padding-top: 1px; }
+.facts dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.facts dd b { color: var(--ink); font-weight: 600; }
+.facts .go { color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; background: none; border: 0; padding: 0; font: inherit; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; gap: 7px; align-items: baseline; padding: 4px 10px; border-radius: 7px; background: var(--panel-2); font-size: 13px; }
+.chip code { font-weight: 600; }
+.chip small { color: var(--muted); }
+.big { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.sbtn { border: 1.5px solid var(--rule); background: var(--panel); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13.5px; }
+.sbtn:hover { border-color: var(--ink); }
+.measured { font-size: 12.5px; color: var(--muted); }
+
+/* overlay */
+svg.overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 5; }
+svg.overlay path { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+.tok rect { fill: var(--hl-edge); }
+.tok.ret rect { fill: var(--green); }
+.tok.err rect { fill: var(--red); }
+.tok text { fill: var(--token-ink); font-family: var(--sans); font-weight: 800; font-size: 12.5px; }
+
+/* controls */
+.controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 0 14px; }
+.btns { display: flex; gap: 6px; align-items: center; }
+.btn { height: 40px; min-width: 40px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--rule); background: var(--panel); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; }
+.btn:hover { border-color: var(--ink); }
+.btn svg { width: 17px; height: 17px; }
+.btn.play { background: var(--ink); border-color: var(--ink); color: var(--ground); width: 46px; height: 46px; padding: 0; }
+.prog { display: grid; gap: 3px; }
+.prog input { width: 100%; accent-color: var(--ink); margin: 0; }
+.prog .lbl { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta select { background: var(--panel); border: 1.5px solid var(--rule); border-radius: 8px; padding: 6px 8px; font-size: 13.5px; }
+
+/* outline drawer */
+.outline { position: fixed; top: 0; left: 0; bottom: 0; width: min(380px, 92vw); background: var(--panel); border-right: 1.5px solid var(--rule);
+  transform: translateX(-105%); transition: transform .25s ease; z-index: 20; display: flex; flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 0 calc(env(safe-area-inset-bottom, 0px) + 10px); }
+.outline.open { transform: none; box-shadow: 20px 0 40px rgba(0,0,0,.12); }
+.outline header { display: flex; justify-content: space-between; align-items: center; padding: 0 14px 10px; }
+.outline h2 { margin: 0; font-size: 17px; }
+.outline ol { list-style: none; margin: 0; padding: 0 8px 20px; overflow: auto; font-size: 13.5px; }
+.outline li button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outline li button:hover { background: var(--panel-2); }
+.outline li.fn button { font-weight: 700; }
+.outline li.ret button { color: var(--muted); }
+.outline li.cur button { background: var(--hl); box-shadow: inset 3px 0 0 var(--hl-edge); }
+.outline li.ex button::after { content: " ✎"; color: var(--muted); font-weight: 400; }
+
+/* empty state */
+.drop { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; }
+.drop.show { display: grid; }
+.drop .box { max-width: 520px; border: 2px dashed var(--rule); border-radius: 16px; padding: 32px; background: var(--panel); text-align: center; }
+.drop.over .box { border-color: var(--blue); }
+.drop h2 { margin: 0 0 8px; font-size: 22px; }
+.drop p { color: var(--muted); margin: 0 0 18px; }
+.drop label { display: inline-block; padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--ground); font-weight: 600; cursor: pointer; }
+.drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.drop .err { color: var(--red); margin-top: 14px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  body { height: auto; }
+  .app { height: auto; padding: 0 10px; grid-template-rows: auto auto auto auto; }
+  .mast { flex-direction: column; align-items: flex-start; }
+  .main { grid-template-columns: 1fr; }
+  .codepanel { height: 46vh; }
+  .side { max-height: none; overflow: visible; }
+  .controls { position: sticky; bottom: 0; background: var(--ground); grid-template-columns: 1fr; gap: 8px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
+  .btns { justify-content: center; flex-wrap: wrap; }
+  .btn .t { display: none; }
+  .ln { padding-right: 140px; }
+}
+@media (prefers-reduced-motion: reduce) { .outline { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <header class="mast">
+    <div><h1 id="title"></h1><p id="subtitle"></p></div>
+    <span class="badge" id="badge"><i></i><span></span></span>
+  </header>
+  <nav class="crumbs" id="crumbs" aria-label="Call stack"></nav>
+  <main class="main" id="main">
+    <section class="codepanel" aria-label="Source code">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="peekbar" id="peekbar" hidden><span id="peekmsg"></span><button id="peekBack">Back to the current step</button></div>
+      <div class="codewrap" id="codewrap">
+        <div class="content" id="content">
+          <div class="hl" id="hl"></div>
+          <div class="code" id="code"></div>
+          <div class="badges" id="badges"></div>
+        </div>
+      </div>
+    </section>
+    <aside class="side" id="side" aria-live="polite"></aside>
+    <svg class="overlay" id="overlay" aria-hidden="true"></svg>
+  </main>
+  <footer class="controls">
+    <div class="btns">
+      <button class="btn" id="bOutline" aria-label="Outline" title="Outline (O)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <button class="btn" id="bPrev" title="Previous step (←)"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Back</span></button>
+      <button class="btn play" id="bPlay" aria-label="Play" title="Play or pause (space)"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4v16l13-8z" fill="currentColor"/></svg></button>
+      <button class="btn" id="bNext" title="Next step (→)"><span class="t">Next</span><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn" id="bOver" title="Step over: skip the inside of a call (↓)"><svg viewBox="0 0 24 24"><path d="M4 15c2-6 14-6 16 0M16 15h4v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Step over</span></button>
+      <button class="btn" id="bOut" title="Step out: finish this function (↑)"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Step out</span></button>
+    </div>
+    <div class="prog">
+      <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Step">
+      <div class="lbl"><span id="count"></span><span id="hint"></span></div>
+    </div>
+    <div class="meta"><label class="sr" for="speed">Autoplay speed</label>
+      <select id="speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+    </div>
+  </footer>
+</div>
+
+<aside class="outline" id="outline" aria-hidden="true" aria-label="Outline">
+  <header><h2>Outline</h2><button class="btn" id="oClose" aria-label="Close outline"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></header>
+  <ol id="olist"></ol>
+</aside>
+
+<div class="drop" id="drop">
+  <div class="box">
+    <h2>Open a walkthrough</h2>
+    <p>Build one with <code>python codestory.py build walkthrough.json --bundle codestory_bundle.json</code>, or drop the built data file here.</p>
+    <label>Choose file<input type="file" id="file" accept=".json,application/json"></label>
+    <div class="err" id="dropErr"></div>
+  </div>
+</div>
+
+<script id="walkthrough" type="application/json">{"schema": "codestory.walkthrough-payload/1", "tool_version": "0.3.0", "title": "Daily weather pipeline, line by line", "subtitle": "One run on 1 October 2026 with --full-refresh: readings in, a cleaned daily summary, a report, a table and an alert out.", "mode": "run", "entry": "main.py --date 2026-10-01 --full-refresh", "run": {"status": "ok", "started_at": "2026-10-08T20:38:14+00:00", "duration_ms": 1437.6, "args": ["--date", "2026-10-01", "--full-refresh"], "safe_mode": true}, "focus": "whole program", "files": {"main.py": "\"\"\"Daily weather pipeline: readings CSV -> clean -> summarize -> report + DB + alerts.\"\"\"\nimport argparse\nimport logging\nfrom datetime import date\n\nfrom config import INPUT_CSV, STATIONS_DB\nfrom etl.extract import read_readings, load_stations\nfrom etl.clean import clean\nfrom etl.transform import enrich, daily_summary, flag_anomalies\nfrom etl import load\n\nlogging.basicConfig(level=logging.INFO, format=\"%(message)s\")\nlog = logging.getLogger(\"pipeline\")\n\n\ndef parse_args():\n    p = argparse.ArgumentParser()\n    p.add_argument(\"--date\", default=str(date.today()))\n    p.add_argument(\"--full-refresh\", action=\"store_true\")\n    p.add_argument(\"--no-alerts\", action=\"store_true\")\n    return p.parse_args()\n\n\ndef main():\n    args = parse_args()\n    raw = read_readings(INPUT_CSV)\n    stations = load_stations(STATIONS_DB)\n    log.info(\"loaded %d readings from %d stations\", len(raw), len(stations))\n\n    readings = clean(raw)\n    summary = daily_summary(enrich(readings, stations))\n    anomalies = flag_anomalies(summary)\n\n    report = load.write_report(summary, args.date)\n    saved = load.save_summary(summary, full_refresh=args.full_refresh)\n    log.info(\"wrote %s and %d rows to the database\", report, saved)\n\n    if len(anomalies) and not args.no_alerts:\n        load.send_alert(anomalies)\n        log.info(\"alerted on %d anomalies\", len(anomalies))\n    else:\n        log.info(\"no alerts sent\")\n\n\nif __name__ == \"__main__\":\n    main()", "config.py": "\"\"\"Settings for the daily weather pipeline.\"\"\"\nimport os\n\nINPUT_CSV = \"data/readings.csv\"\nSTATIONS_DB = \"data/stations.db\"\nOUTPUT_DIR = \"output\"\nMIN_TEMP_C = -40.0\nMAX_TEMP_C = 55.0\nANOMALY_Z = 1.4\nALERT_WEBHOOK = os.getenv(\"ALERT_WEBHOOK\", \"https://hooks.example.com/weather-alerts\")\nAPI_TOKEN = os.getenv(\"WEATHER_API_TOKEN\", \"sk-test-1234567890abcdef\")", "etl/extract.py": "import sqlite3\nimport pandas as pd\n\n\ndef read_readings(path):\n    \"\"\"Load raw sensor readings from the daily CSV drop.\"\"\"\n    df = pd.read_csv(path, parse_dates=[\"timestamp\"])\n    return df\n\n\ndef load_stations(db_path):\n    \"\"\"Fetch station metadata (name, region, elevation).\"\"\"\n    with sqlite3.connect(db_path) as conn:\n        return pd.read_sql_query(\"SELECT station_id, name, region, elevation_m FROM stations\", conn)", "etl/__init__.py": "", "etl/clean.py": "from config import MIN_TEMP_C, MAX_TEMP_C\n\n\ndef to_celsius(df):\n    \"\"\"Some stations report Fahrenheit; convert them.\"\"\"\n    df = df.copy()\n    f = df[\"unit\"] == \"F\"\n    df.loc[f, \"temp\"] = (df.loc[f, \"temp\"] - 32) * 5 / 9\n    df[\"unit\"] = \"C\"\n    return df\n\n\ndef drop_invalid(df):\n    \"\"\"Remove missing values and physically impossible temperatures.\"\"\"\n    df = df.dropna(subset=[\"temp\", \"station_id\"])\n    return df[(df[\"temp\"] >= MIN_TEMP_C) & (df[\"temp\"] <= MAX_TEMP_C)]\n\n\ndef dedupe(df):\n    \"\"\"Sensors sometimes resend a reading; keep the first.\"\"\"\n    return df.drop_duplicates(subset=[\"station_id\", \"timestamp\"], keep=\"first\")\n\n\ndef clean(df):\n    for step in (to_celsius, drop_invalid, dedupe):\n        df = step(df)\n    return df", "etl/transform.py": "import numpy as np\nfrom config import ANOMALY_Z\n\n\ndef enrich(df, stations):\n    \"\"\"Attach station name and region to every reading.\"\"\"\n    return df.merge(stations, on=\"station_id\", how=\"left\")\n\n\ndef daily_summary(df):\n    \"\"\"One row per station per day: min, max, mean temperature.\"\"\"\n    df = df.assign(day=df[\"timestamp\"].dt.date)\n    out = (df.groupby([\"station_id\", \"name\", \"region\", \"day\"])[\"temp\"]\n             .agg([\"min\", \"max\", \"mean\", \"count\"]).reset_index())\n    out[\"mean\"] = out[\"mean\"].round(2)\n    return out\n\n\ndef flag_anomalies(summary):\n    \"\"\"Stations whose daily mean is far from their region's mean.\"\"\"\n    g = summary.groupby(\"region\")[\"mean\"]\n    z = (summary[\"mean\"] - g.transform(\"mean\")) / g.transform(\"std\").replace(0, np.nan)\n    return summary[z.abs() > ANOMALY_Z].copy()", "etl/load.py": "import os\nimport sqlite3\nimport requests\nfrom config import OUTPUT_DIR, STATIONS_DB, ALERT_WEBHOOK\n\n\ndef write_report(summary, run_date):\n    os.makedirs(OUTPUT_DIR, exist_ok=True)\n    path = os.path.join(OUTPUT_DIR, f\"daily_summary_{run_date}.csv\")\n    summary.to_csv(path, index=False)\n    return path\n\n\ndef save_summary(summary, full_refresh=False):\n    with sqlite3.connect(STATIONS_DB) as conn:\n        if full_refresh:\n            conn.execute(\"DELETE FROM daily_summary\")\n        summary.assign(day=summary[\"day\"].astype(str)).to_sql(\"daily_summary\", conn, if_exists=\"append\", index=False)\n        return len(summary)\n\n\ndef send_alert(anomalies):\n    payload = {\"count\": len(anomalies),\n               \"stations\": anomalies[[\"station_id\", \"name\", \"mean\"]].to_dict(orient=\"records\")}\n    r = requests.post(ALERT_WEBHOOK, json=payload, timeout=10)\n    return r.status_code"}, "statements": {"main.py:2": {"id": "main.py:2", "file": "main.py", "line": 2, "end": 2, "full_end": 2, "kind": "import", "scope": "main:<module>", "writes": ["argparse"], "names": {"argparse": {"kind": "import_stdlib", "from": "argparse", "package": "argparse"}}, "group": "import"}, "main.py:3": {"id": "main.py:3", "file": "main.py", "line": 3, "end": 3, "full_end": 3, "kind": "import", "scope": "main:<module>", "writes": ["logging"], "names": {"logging": {"kind": "import_stdlib", "from": "logging", "package": "logging"}}, "group": "import"}, "main.py:4": {"id": "main.py:4", "file": "main.py", "line": 4, "end": 4, "full_end": 4, "kind": "import", "scope": "main:<module>", "writes": ["date"], "names": {"date": {"kind": "import_stdlib", "from": "datetime.date", "package": "datetime"}}, "group": "import"}, "main.py:6": {"id": "main.py:6", "file": "main.py", "line": 6, "end": 6, "full_end": 6, "kind": "import", "scope": "main:<module>", "writes": ["INPUT_CSV", "STATIONS_DB"], "names": {"INPUT_CSV": {"kind": "import_project", "from": "config.INPUT_CSV", "where": "config.py:4", "what": "constant", "value": "'data/readings.csv'"}, "STATIONS_DB": {"kind": "import_project", "from": "config.STATIONS_DB", "where": "config.py:5", "what": "constant", "value": "'data/stations.db'"}}, "imports_modules": ["config"], "group": "import"}, "main.py:7": {"id": "main.py:7", "file": "main.py", "line": 7, "end": 7, "full_end": 7, "kind": "import", "scope": "main:<module>", "writes": ["read_readings", "load_stations"], "names": {"read_readings": {"kind": "import_project", "from": "etl.extract.read_readings", "where": "etl/extract.py:5", "id": "etl.extract:read_readings", "what": "function"}, "load_stations": {"kind": "import_project", "from": "etl.extract.load_stations", "where": "etl/extract.py:11", "id": "etl.extract:load_stations", "what": "function"}}, "imports_modules": ["etl", "etl.extract"], "group": "import"}, "main.py:8": {"id": "main.py:8", "file": "main.py", "line": 8, "end": 8, "full_end": 8, "kind": "import", "scope": "main:<module>", "writes": ["clean"], "names": {"clean": {"kind": "import_project", "from": "etl.clean.clean", "where": "etl/clean.py:24", "id": "etl.clean:clean", "what": "function"}}, "imports_modules": ["etl", "etl.clean"], "group": "import"}, "main.py:9": {"id": "main.py:9", "file": "main.py", "line": 9, "end": 9, "full_end": 9, "kind": "import", "scope": "main:<module>", "writes": ["enrich", "daily_summary", "flag_anomalies"], "names": {"enrich": {"kind": "import_project", "from": "etl.transform.enrich", "where": "etl/transform.py:5", "id": "etl.transform:enrich", "what": "function"}, "daily_summary": {"kind": "import_project", "from": "etl.transform.daily_summary", "where": "etl/transform.py:10", "id": "etl.transform:daily_summary", "what": "function"}, "flag_anomalies": {"kind": "import_project", "from": "etl.transform.flag_anomalies", "where": "etl/transform.py:19", "id": "etl.transform:flag_anomalies", "what": "function"}}, "imports_modules": ["etl", "etl.transform"], "group": "import"}, "main.py:10": {"id": "main.py:10", "file": "main.py", "line": 10, "end": 10, "full_end": 10, "kind": "import", "scope": "main:<module>", "writes": ["load"], "names": {"load": {"kind": "import_project", "from": "etl.load", "where": "etl/load.py", "what": "module"}}, "imports_modules": ["etl", "etl.load"], "group": "import"}, "main.py:12": {"id": "main.py:12", "file": "main.py", "line": 12, "end": 12, "full_end": 12, "kind": "call", "scope": "main:<module>", "reads": ["logging"], "names": {"logging": {"kind": "import_stdlib", "from": "logging", "package": "logging"}}, "calls": [{"call": "logging.basicConfig", "origin": "stdlib", "package": "logging", "qualified": "logging.basicConfig"}]}, "main.py:13": {"id": "main.py:13", "file": "main.py", "line": 13, "end": 13, "full_end": 13, "kind": "assign", "scope": "main:<module>", "reads": ["logging"], "writes": ["log"], "names": {"logging": {"kind": "import_stdlib", "from": "logging", "package": "logging"}, "log": {"kind": "global", "where": "main.py:13", "value": "logging.getLogger(\"pipeline\")"}}, "calls": [{"call": "logging.getLogger", "origin": "stdlib", "package": "logging", "qualified": "logging.getLogger"}]}, "main.py:16": {"id": "main.py:16", "file": "main.py", "line": 16, "end": 16, "full_end": 21, "kind": "def", "scope": "main:<module>", "writes": ["parse_args"], "names": {"parse_args": {"kind": "function", "where": "main.py:16", "id": "main:parse_args"}}, "defines": "main:parse_args", "group": "definition", "blocks": {"body": ["main.py:17", "main.py:18", "main.py:19", "main.py:20", "main.py:21"]}}, "main.py:17": {"id": "main.py:17", "file": "main.py", "line": 17, "end": 17, "full_end": 17, "kind": "assign", "scope": "main:parse_args", "parent": "main.py:16", "block": "body", "reads": ["argparse"], "writes": ["p"], "names": {"argparse": {"kind": "import_stdlib", "from": "argparse", "package": "argparse"}, "p": {"kind": "local"}}, "calls": [{"call": "argparse.ArgumentParser", "origin": "stdlib", "package": "argparse", "qualified": "argparse.ArgumentParser"}]}, "main.py:18": {"id": "main.py:18", "file": "main.py", "line": 18, "end": 18, "full_end": 18, "kind": "call", "scope": "main:parse_args", "parent": "main.py:16", "block": "body", "reads": ["p", "str", "date"], "names": {"p": {"kind": "local"}, "str": {"kind": "builtin"}, "date": {"kind": "import_stdlib", "from": "datetime.date", "package": "datetime"}}, "calls": [{"call": "date.today", "origin": "stdlib", "package": "datetime", "qualified": "datetime.date.today"}, {"call": "str", "origin": "builtin"}, {"call": "p.add_argument", "origin": "method", "on": "p"}]}, "main.py:19": {"id": "main.py:19", "file": "main.py", "line": 19, "end": 19, "full_end": 19, "kind": "call", "scope": "main:parse_args", "parent": "main.py:16", "block": "body", "reads": ["p"], "names": {"p": {"kind": "local"}}, "calls": [{"call": "p.add_argument", "origin": "method", "on": "p"}]}, "main.py:20": {"id": "main.py:20", "file": "main.py", "line": 20, "end": 20, "full_end": 20, "kind": "call", "scope": "main:parse_args", "parent": "main.py:16", "block": "body", "reads": ["p"], "names": {"p": {"kind": "local"}}, "calls": [{"call": "p.add_argument", "origin": "method", "on": "p"}]}, "main.py:21": {"id": "main.py:21", "file": "main.py", "line": 21, "end": 21, "full_end": 21, "kind": "return", "scope": "main:parse_args", "parent": "main.py:16", "block": "body", "reads": ["p"], "names": {"p": {"kind": "local"}}, "calls": [{"call": "p.parse_args", "origin": "method", "on": "p"}]}, "main.py:24": {"id": "main.py:24", "file": "main.py", "line": 24, "end": 24, "full_end": 42, "kind": "def", "scope": "main:<module>", "writes": ["main"], "names": {"main": {"kind": "function", "where": "main.py:24", "id": "main:main"}}, "defines": "main:main", "group": "definition", "blocks": {"body": ["main.py:25", "main.py:26", "main.py:27", "main.py:28", "main.py:30", "main.py:31", "main.py:32", "main.py:34", "main.py:35", "main.py:36", "main.py:38"]}}, "main.py:25": {"id": "main.py:25", "file": "main.py", "line": 25, "end": 25, "full_end": 25, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["parse_args"], "writes": ["args"], "names": {"parse_args": {"kind": "function", "where": "main.py:16", "id": "main:parse_args"}, "args": {"kind": "local"}}, "calls": [{"call": "parse_args", "origin": "project", "id": "main:parse_args", "where": "main.py:16"}]}, "main.py:26": {"id": "main.py:26", "file": "main.py", "line": 26, "end": 26, "full_end": 26, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["read_readings", "INPUT_CSV"], "writes": ["raw"], "names": {"read_readings": {"kind": "import_project", "from": "etl.extract.read_readings", "where": "etl/extract.py:5", "id": "etl.extract:read_readings", "what": "function"}, "INPUT_CSV": {"kind": "import_project", "from": "config.INPUT_CSV", "where": "config.py:4", "what": "constant", "value": "'data/readings.csv'"}, "raw": {"kind": "local"}}, "calls": [{"call": "read_readings", "origin": "project", "id": "etl.extract:read_readings", "where": "etl/extract.py:5"}]}, "main.py:27": {"id": "main.py:27", "file": "main.py", "line": 27, "end": 27, "full_end": 27, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["load_stations", "STATIONS_DB"], "writes": ["stations"], "names": {"load_stations": {"kind": "import_project", "from": "etl.extract.load_stations", "where": "etl/extract.py:11", "id": "etl.extract:load_stations", "what": "function"}, "STATIONS_DB": {"kind": "import_project", "from": "config.STATIONS_DB", "where": "config.py:5", "what": "constant", "value": "'data/stations.db'"}, "stations": {"kind": "local"}}, "calls": [{"call": "load_stations", "origin": "project", "id": "etl.extract:load_stations", "where": "etl/extract.py:11"}]}, "main.py:28": {"id": "main.py:28", "file": "main.py", "line": 28, "end": 28, "full_end": 28, "kind": "call", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["log", "len", "raw", "stations"], "names": {"log": {"kind": "global", "where": "main.py:13", "value": "logging.getLogger(\"pipeline\")"}, "len": {"kind": "builtin"}, "raw": {"kind": "local"}, "stations": {"kind": "local"}}, "calls": [{"call": "len", "origin": "builtin"}, {"call": "log.info", "origin": "method", "on": "log"}]}, "main.py:30": {"id": "main.py:30", "file": "main.py", "line": 30, "end": 30, "full_end": 30, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["clean", "raw"], "writes": ["readings"], "names": {"clean": {"kind": "import_project", "from": "etl.clean.clean", "where": "etl/clean.py:24", "id": "etl.clean:clean", "what": "function"}, "raw": {"kind": "local"}, "readings": {"kind": "local"}}, "calls": [{"call": "clean", "origin": "project", "id": "etl.clean:clean", "where": "etl/clean.py:24"}]}, "main.py:31": {"id": "main.py:31", "file": "main.py", "line": 31, "end": 31, "full_end": 31, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["daily_summary", "enrich", "readings", "stations"], "writes": ["summary"], "names": {"daily_summary": {"kind": "import_project", "from": "etl.transform.daily_summary", "where": "etl/transform.py:10", "id": "etl.transform:daily_summary", "what": "function"}, "enrich": {"kind": "import_project", "from": "etl.transform.enrich", "where": "etl/transform.py:5", "id": "etl.transform:enrich", "what": "function"}, "readings": {"kind": "local"}, "stations": {"kind": "local"}, "summary": {"kind": "local"}}, "calls": [{"call": "enrich", "origin": "project", "id": "etl.transform:enrich", "where": "etl/transform.py:5"}, {"call": "daily_summary", "origin": "project", "id": "etl.transform:daily_summary", "where": "etl/transform.py:10"}]}, "main.py:32": {"id": "main.py:32", "file": "main.py", "line": 32, "end": 32, "full_end": 32, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["flag_anomalies", "summary"], "writes": ["anomalies"], "names": {"flag_anomalies": {"kind": "import_project", "from": "etl.transform.flag_anomalies", "where": "etl/transform.py:19", "id": "etl.transform:flag_anomalies", "what": "function"}, "summary": {"kind": "local"}, "anomalies": {"kind": "local"}}, "calls": [{"call": "flag_anomalies", "origin": "project", "id": "etl.transform:flag_anomalies", "where": "etl/transform.py:19"}]}, "main.py:34": {"id": "main.py:34", "file": "main.py", "line": 34, "end": 34, "full_end": 34, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["summary", "load", "args"], "writes": ["report"], "names": {"summary": {"kind": "local"}, "load": {"kind": "import_project", "from": "etl.load", "where": "etl/load.py", "what": "module"}, "args": {"kind": "local"}, "report": {"kind": "local"}}, "calls": [{"call": "load.write_report", "origin": "project", "id": "etl.load:write_report", "where": "etl/load.py:7"}]}, "main.py:35": {"id": "main.py:35", "file": "main.py", "line": 35, "end": 35, "full_end": 35, "kind": "assign", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["summary", "load", "args"], "writes": ["saved"], "names": {"summary": {"kind": "local"}, "load": {"kind": "import_project", "from": "etl.load", "where": "etl/load.py", "what": "module"}, "args": {"kind": "local"}, "saved": {"kind": "local"}}, "calls": [{"call": "load.save_summary", "origin": "project", "id": "etl.load:save_summary", "where": "etl/load.py:14"}]}, "main.py:36": {"id": "main.py:36", "file": "main.py", "line": 36, "end": 36, "full_end": 36, "kind": "call", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["report", "saved", "log"], "names": {"report": {"kind": "local"}, "saved": {"kind": "local"}, "log": {"kind": "global", "where": "main.py:13", "value": "logging.getLogger(\"pipeline\")"}}, "calls": [{"call": "log.info", "origin": "method", "on": "log"}]}, "main.py:38": {"id": "main.py:38", "file": "main.py", "line": 38, "end": 38, "full_end": 42, "kind": "if", "scope": "main:main", "parent": "main.py:24", "block": "body", "reads": ["len", "anomalies", "args"], "names": {"len": {"kind": "builtin"}, "anomalies": {"kind": "local"}, "args": {"kind": "local"}}, "calls": [{"call": "len", "origin": "builtin"}], "blocks": {"body": ["main.py:39", "main.py:40"], "orelse": ["main.py:42"]}}, "main.py:39": {"id": "main.py:39", "file": "main.py", "line": 39, "end": 39, "full_end": 39, "kind": "call", "scope": "main:main", "parent": "main.py:38", "block": "body", "reads": ["anomalies", "load"], "names": {"anomalies": {"kind": "local"}, "load": {"kind": "import_project", "from": "etl.load", "where": "etl/load.py", "what": "module"}}, "calls": [{"call": "load.send_alert", "origin": "project", "id": "etl.load:send_alert", "where": "etl/load.py:22"}]}, "main.py:40": {"id": "main.py:40", "file": "main.py", "line": 40, "end": 40, "full_end": 40, "kind": "call", "scope": "main:main", "parent": "main.py:38", "block": "body", "reads": ["log", "len", "anomalies"], "names": {"log": {"kind": "global", "where": "main.py:13", "value": "logging.getLogger(\"pipeline\")"}, "len": {"kind": "builtin"}, "anomalies": {"kind": "local"}}, "calls": [{"call": "len", "origin": "builtin"}, {"call": "log.info", "origin": "method", "on": "log"}]}, "main.py:42": {"id": "main.py:42", "file": "main.py", "line": 42, "end": 42, "full_end": 42, "kind": "call", "scope": "main:main", "parent": "main.py:38", "block": "orelse", "reads": ["log"], "names": {"log": {"kind": "global", "where": "main.py:13", "value": "logging.getLogger(\"pipeline\")"}}, "calls": [{"call": "log.info", "origin": "method", "on": "log"}]}, "main.py:45": {"id": "main.py:45", "file": "main.py", "line": 45, "end": 45, "full_end": 46, "kind": "if", "scope": "main:<module>", "reads": ["__name__"], "names": {"__name__": {"kind": "builtin"}}, "blocks": {"body": ["main.py:46"]}}, "main.py:46": {"id": "main.py:46", "file": "main.py", "line": 46, "end": 46, "full_end": 46, "kind": "call", "scope": "main:<module>", "parent": "main.py:45", "block": "body", "reads": ["main"], "names": {"main": {"kind": "function", "where": "main.py:24", "id": "main:main"}}, "calls": [{"call": "main", "origin": "project", "id": "main:main", "where": "main.py:24"}]}, "config.py:2": {"id": "config.py:2", "file": "config.py", "line": 2, "end": 2, "full_end": 2, "kind": "import", "scope": "config:<module>", "writes": ["os"], "names": {"os": {"kind": "import_stdlib", "from": "os", "package": "os"}}, "group": "import"}, "config.py:4": {"id": "config.py:4", "file": "config.py", "line": 4, "end": 4, "full_end": 4, "kind": "constant", "scope": "config:<module>", "writes": ["INPUT_CSV"], "names": {"INPUT_CSV": {"kind": "constant", "where": "config.py:4", "value": "'data/readings.csv'"}}, "value": "'data/readings.csv'", "group": "constant"}, "config.py:5": {"id": "config.py:5", "file": "config.py", "line": 5, "end": 5, "full_end": 5, "kind": "constant", "scope": "config:<module>", "writes": ["STATIONS_DB"], "names": {"STATIONS_DB": {"kind": "constant", "where": "config.py:5", "value": "'data/stations.db'"}}, "value": "'data/stations.db'", "group": "constant"}, "config.py:6": {"id": "config.py:6", "file": "config.py", "line": 6, "end": 6, "full_end": 6, "kind": "constant", "scope": "config:<module>", "writes": ["OUTPUT_DIR"], "names": {"OUTPUT_DIR": {"kind": "constant", "where": "config.py:6", "value": "'output'"}}, "value": "'output'", "group": "constant"}, "config.py:7": {"id": "config.py:7", "file": "config.py", "line": 7, "end": 7, "full_end": 7, "kind": "constant", "scope": "config:<module>", "writes": ["MIN_TEMP_C"], "names": {"MIN_TEMP_C": {"kind": "constant", "where": "config.py:7", "value": "-40.0"}}, "value": "-40.0", "group": "constant"}, "config.py:8": {"id": "config.py:8", "file": "config.py", "line": 8, "end": 8, "full_end": 8, "kind": "constant", "scope": "config:<module>", "writes": ["MAX_TEMP_C"], "names": {"MAX_TEMP_C": {"kind": "constant", "where": "config.py:8", "value": "55.0"}}, "value": "55.0", "group": "constant"}, "config.py:9": {"id": "config.py:9", "file": "config.py", "line": 9, "end": 9, "full_end": 9, "kind": "constant", "scope": "config:<module>", "writes": ["ANOMALY_Z"], "names": {"ANOMALY_Z": {"kind": "constant", "where": "config.py:9", "value": "1.4"}}, "value": "1.4", "group": "constant"}, "config.py:10": {"id": "config.py:10", "file": "config.py", "line": 10, "end": 10, "full_end": 10, "kind": "assign", "scope": "config:<module>", "reads": ["os"], "writes": ["ALERT_WEBHOOK"], "names": {"os": {"kind": "import_stdlib", "from": "os", "package": "os"}, "ALERT_WEBHOOK": {"kind": "constant", "where": "config.py:10", "value": "os.getenv(\"ALERT_WEBHOOK\", \"https://hooks.example.com/weather-alerts\")"}}, "calls": [{"call": "os.getenv", "origin": "stdlib", "package": "os", "qualified": "os.getenv"}], "io": [{"line": 10, "call": "os.getenv", "direction": "read", "kind": "config", "target": "ALERT_WEBHOOK"}]}, "config.py:11": {"id": "config.py:11", "file": "config.py", "line": 11, "end": 11, "full_end": 11, "kind": "assign", "scope": "config:<module>", "reads": ["os"], "writes": ["API_TOKEN"], "names": {"os": {"kind": "import_stdlib", "from": "os", "package": "os"}, "API_TOKEN": {"kind": "constant", "where": "config.py:11", "value": "***"}}, "calls": [{"call": "os.getenv", "origin": "stdlib", "package": "os", "qualified": "os.getenv"}], "io": [{"line": 11, "call": "os.getenv", "direction": "read", "kind": "config", "target": "WEATHER_API_TOKEN"}]}, "etl/extract.py:1": {"id": "etl/extract.py:1", "file": "etl/extract.py", "line": 1, "end": 1, "full_end": 1, "kind": "import", "scope": "etl.extract:<module>", "writes": ["sqlite3"], "names": {"sqlite3": {"kind": "import_stdlib", "from": "sqlite3", "package": "sqlite3"}}, "group": "import"}, "etl/extract.py:2": {"id": "etl/extract.py:2", "file": "etl/extract.py", "line": 2, "end": 2, "full_end": 2, "kind": "import", "scope": "etl.extract:<module>", "writes": ["pd"], "names": {"pd": {"kind": "import_package", "from": "pandas", "package": "pandas"}}, "group": "import"}, "etl/extract.py:5": {"id": "etl/extract.py:5", "file": "etl/extract.py", "line": 5, "end": 5, "full_end": 8, "kind": "def", "scope": "etl.extract:<module>", "writes": ["read_readings"], "names": {"read_readings": {"kind": "function", "where": "etl/extract.py:5", "id": "etl.extract:read_readings"}}, "defines": "etl.extract:read_readings", "doc": "Load raw sensor readings from the daily CSV drop.", "group": "definition", "blocks": {"body": ["etl/extract.py:7", "etl/extract.py:8"]}}, "etl/extract.py:7": {"id": "etl/extract.py:7", "file": "etl/extract.py", "line": 7, "end": 7, "full_end": 7, "kind": "assign", "scope": "etl.extract:read_readings", "parent": "etl/extract.py:5", "block": "body", "reads": ["path", "pd"], "writes": ["df"], "names": {"path": {"kind": "parameter"}, "pd": {"kind": "import_package", "from": "pandas", "package": "pandas"}, "df": {"kind": "local"}}, "calls": [{"call": "pd.read_csv", "origin": "package", "package": "pandas", "qualified": "pandas.read_csv"}], "io": [{"line": 7, "call": "pd.read_csv", "direction": "read", "kind": "file", "target": "path"}]}, "etl/extract.py:8": {"id": "etl/extract.py:8", "file": "etl/extract.py", "line": 8, "end": 8, "full_end": 8, "kind": "return", "scope": "etl.extract:read_readings", "parent": "etl/extract.py:5", "block": "body", "reads": ["df"], "names": {"df": {"kind": "local"}}}, "etl/extract.py:11": {"id": "etl/extract.py:11", "file": "etl/extract.py", "line": 11, "end": 11, "full_end": 14, "kind": "def", "scope": "etl.extract:<module>", "writes": ["load_stations"], "names": {"load_stations": {"kind": "function", "where": "etl/extract.py:11", "id": "etl.extract:load_stations"}}, "defines": "etl.extract:load_stations", "doc": "Fetch station metadata (name, region, elevation).", "group": "definition", "blocks": {"body": ["etl/extract.py:13"]}}, "etl/extract.py:13": {"id": "etl/extract.py:13", "file": "etl/extract.py", "line": 13, "end": 13, "full_end": 14, "kind": "with", "scope": "etl.extract:load_stations", "parent": "etl/extract.py:11", "block": "body", "reads": ["db_path", "sqlite3"], "writes": ["conn"], "names": {"db_path": {"kind": "parameter"}, "sqlite3": {"kind": "import_stdlib", "from": "sqlite3", "package": "sqlite3"}, "conn": {"kind": "local"}}, "calls": [{"call": "sqlite3.connect", "origin": "stdlib", "package": "sqlite3", "qualified": "sqlite3.connect"}], "io": [{"line": 13, "call": "sqlite3.connect", "direction": "connect", "kind": "database", "target": "db_path"}], "blocks": {"body": ["etl/extract.py:14"]}}, "etl/extract.py:14": {"id": "etl/extract.py:14", "file": "etl/extract.py", "line": 14, "end": 14, "full_end": 14, "kind": "return", "scope": "etl.extract:load_stations", "parent": "etl/extract.py:13", "block": "body", "reads": ["conn", "pd"], "names": {"conn": {"kind": "local"}, "pd": {"kind": "import_package", "from": "pandas", "package": "pandas"}}, "calls": [{"call": "pd.read_sql_query", "origin": "package", "package": "pandas", "qualified": "pandas.read_sql_query"}], "io": [{"line": 14, "call": "pd.read_sql_query", "direction": "read", "kind": "database", "target": "SELECT station_id, name, region, elevation_m FROM stations"}]}, "etl/clean.py:1": {"id": "etl/clean.py:1", "file": "etl/clean.py", "line": 1, "end": 1, "full_end": 1, "kind": "import", "scope": "etl.clean:<module>", "writes": ["MIN_TEMP_C", "MAX_TEMP_C"], "names": {"MIN_TEMP_C": {"kind": "import_project", "from": "config.MIN_TEMP_C", "where": "config.py:7", "what": "constant", "value": "-40.0"}, "MAX_TEMP_C": {"kind": "import_project", "from": "config.MAX_TEMP_C", "where": "config.py:8", "what": "constant", "value": "55.0"}}, "imports_modules": ["config"], "group": "import"}, "etl/clean.py:4": {"id": "etl/clean.py:4", "file": "etl/clean.py", "line": 4, "end": 4, "full_end": 10, "kind": "def", "scope": "etl.clean:<module>", "writes": ["to_celsius"], "names": {"to_celsius": {"kind": "function", "where": "etl/clean.py:4", "id": "etl.clean:to_celsius"}}, "defines": "etl.clean:to_celsius", "doc": "Some stations report Fahrenheit; convert them.", "group": "definition", "blocks": {"body": ["etl/clean.py:6", "etl/clean.py:7", "etl/clean.py:8", "etl/clean.py:9", "etl/clean.py:10"]}}, "etl/clean.py:6": {"id": "etl/clean.py:6", "file": "etl/clean.py", "line": 6, "end": 6, "full_end": 6, "kind": "assign", "scope": "etl.clean:to_celsius", "parent": "etl/clean.py:4", "block": "body", "reads": ["df"], "writes": ["df"], "names": {"df": {"kind": "parameter"}}, "calls": [{"call": "df.copy", "origin": "method", "on": "df"}]}, "etl/clean.py:7": {"id": "etl/clean.py:7", "file": "etl/clean.py", "line": 7, "end": 7, "full_end": 7, "kind": "assign", "scope": "etl.clean:to_celsius", "parent": "etl/clean.py:4", "block": "body", "reads": ["df"], "writes": ["f"], "names": {"df": {"kind": "parameter"}, "f": {"kind": "local"}}}, "etl/clean.py:8": {"id": "etl/clean.py:8", "file": "etl/clean.py", "line": 8, "end": 8, "full_end": 8, "kind": "assign", "scope": "etl.clean:to_celsius", "parent": "etl/clean.py:4", "block": "body", "reads": ["df", "f"], "mutates": ["df"], "names": {"df": {"kind": "parameter"}, "f": {"kind": "local"}}}, "etl/clean.py:9": {"id": "etl/clean.py:9", "file": "etl/clean.py", "line": 9, "end": 9, "full_end": 9, "kind": "assign", "scope": "etl.clean:to_celsius", "parent": "etl/clean.py:4", "block": "body", "reads": ["df"], "mutates": ["df"], "names": {"df": {"kind": "parameter"}}}, "etl/clean.py:10": {"id": "etl/clean.py:10", "file": "etl/clean.py", "line": 10, "end": 10, "full_end": 10, "kind": "return", "scope": "etl.clean:to_celsius", "parent": "etl/clean.py:4", "block": "body", "reads": ["df"], "names": {"df": {"kind": "parameter"}}}, "etl/clean.py:13": {"id": "etl/clean.py:13", "file": "etl/clean.py", "line": 13, "end": 13, "full_end": 16, "kind": "def", "scope": "etl.clean:<module>", "writes": ["drop_invalid"], "names": {"drop_invalid": {"kind": "function", "where": "etl/clean.py:13", "id": "etl.clean:drop_invalid"}}, "defines": "etl.clean:drop_invalid", "doc": "Remove missing values and physically impossible temperatures.", "group": "definition", "blocks": {"body": ["etl/clean.py:15", "etl/clean.py:16"]}}, "etl/clean.py:15": {"id": "etl/clean.py:15", "file": "etl/clean.py", "line": 15, "end": 15, "full_end": 15, "kind": "assign", "scope": "etl.clean:drop_invalid", "parent": "etl/clean.py:13", "block": "body", "reads": ["df"], "writes": ["df"], "names": {"df": {"kind": "parameter"}}, "calls": [{"call": "df.dropna", "origin": "method", "on": "df"}]}, "etl/clean.py:16": {"id": "etl/clean.py:16", "file": "etl/clean.py", "line": 16, "end": 16, "full_end": 16, "kind": "return", "scope": "etl.clean:drop_invalid", "parent": "etl/clean.py:13", "block": "body", "reads": ["df", "MIN_TEMP_C", "MAX_TEMP_C"], "names": {"df": {"kind": "parameter"}, "MIN_TEMP_C": {"kind": "import_project", "from": "config.MIN_TEMP_C", "where": "config.py:7", "what": "constant", "value": "-40.0"}, "MAX_TEMP_C": {"kind": "import_project", "from": "config.MAX_TEMP_C", "where": "config.py:8", "what": "constant", "value": "55.0"}}}, "etl/clean.py:19": {"id": "etl/clean.py:19", "file": "etl/clean.py", "line": 19, "end": 19, "full_end": 21, "kind": "def", "scope": "etl.clean:<module>", "writes": ["dedupe"], "names": {"dedupe": {"kind": "function", "where": "etl/clean.py:19", "id": "etl.clean:dedupe"}}, "defines": "etl.clean:dedupe", "doc": "Sensors sometimes resend a reading; keep the first.", "group": "definition", "blocks": {"body": ["etl/clean.py:21"]}}, "etl/clean.py:21": {"id": "etl/clean.py:21", "file": "etl/clean.py", "line": 21, "end": 21, "full_end": 21, "kind": "return", "scope": "etl.clean:dedupe", "parent": "etl/clean.py:19", "block": "body", "reads": ["df"], "names": {"df": {"kind": "parameter"}}, "calls": [{"call": "df.drop_duplicates", "origin": "method", "on": "df"}]}, "etl/clean.py:24": {"id": "etl/clean.py:24", "file": "etl/clean.py", "line": 24, "end": 24, "full_end": 27, "kind": "def", "scope": "etl.clean:<module>", "writes": ["clean"], "names": {"clean": {"kind": "function", "where": "etl/clean.py:24", "id": "etl.clean:clean"}}, "defines": "etl.clean:clean", "group": "definition", "blocks": {"body": ["etl/clean.py:25", "etl/clean.py:27"]}}, "etl/clean.py:25": {"id": "etl/clean.py:25", "file": "etl/clean.py", "line": 25, "end": 25, "full_end": 26, "kind": "for", "scope": "etl.clean:clean", "parent": "etl/clean.py:24", "block": "body", "reads": ["to_celsius", "drop_invalid", "dedupe"], "writes": ["step"], "names": {"to_celsius": {"kind": "function", "where": "etl/clean.py:4", "id": "etl.clean:to_celsius"}, "drop_invalid": {"kind": "function", "where": "etl/clean.py:13", "id": "etl.clean:drop_invalid"}, "dedupe": {"kind": "function", "where": "etl/clean.py:19", "id": "etl.clean:dedupe"}, "step": {"kind": "local"}}, "references": ["etl.clean:to_celsius", "etl.clean:drop_invalid", "etl.clean:dedupe"], "blocks": {"body": ["etl/clean.py:26"]}}, "etl/clean.py:26": {"id": "etl/clean.py:26", "file": "etl/clean.py", "line": 26, "end": 26, "full_end": 26, "kind": "assign", "scope": "etl.clean:clean", "parent": "etl/clean.py:25", "block": "body", "reads": ["step", "df"], "writes": ["df"], "names": {"step": {"kind": "local"}, "df": {"kind": "parameter"}}, "calls": [{"call": "step", "origin": "local"}]}, "etl/clean.py:27": {"id": "etl/clean.py:27", "file": "etl/clean.py", "line": 27, "end": 27, "full_end": 27, "kind": "return", "scope": "etl.clean:clean", "parent": "etl/clean.py:24", "block": "body", "reads": ["df"], "names": {"df": {"kind": "parameter"}}}, "etl/transform.py:1": {"id": "etl/transform.py:1", "file": "etl/transform.py", "line": 1, "end": 1, "full_end": 1, "kind": "import", "scope": "etl.transform:<module>", "writes": ["np"], "names": {"np": {"kind": "import_package", "from": "numpy", "package": "numpy"}}, "group": "import"}, "etl/transform.py:2": {"id": "etl/transform.py:2", "file": "etl/transform.py", "line": 2, "end": 2, "full_end": 2, "kind": "import", "scope": "etl.transform:<module>", "writes": ["ANOMALY_Z"], "names": {"ANOMALY_Z": {"kind": "import_project", "from": "config.ANOMALY_Z", "where": "config.py:9", "what": "constant", "value": "1.4"}}, "imports_modules": ["config"], "group": "import"}, "etl/transform.py:5": {"id": "etl/transform.py:5", "file": "etl/transform.py", "line": 5, "end": 5, "full_end": 7, "kind": "def", "scope": "etl.transform:<module>", "writes": ["enrich"], "names": {"enrich": {"kind": "function", "where": "etl/transform.py:5", "id": "etl.transform:enrich"}}, "defines": "etl.transform:enrich", "doc": "Attach station name and region to every reading.", "group": "definition", "blocks": {"body": ["etl/transform.py:7"]}}, "etl/transform.py:7": {"id": "etl/transform.py:7", "file": "etl/transform.py", "line": 7, "end": 7, "full_end": 7, "kind": "return", "scope": "etl.transform:enrich", "parent": "etl/transform.py:5", "block": "body", "reads": ["stations", "df"], "names": {"stations": {"kind": "parameter"}, "df": {"kind": "parameter"}}, "calls": [{"call": "df.merge", "origin": "method", "on": "df"}]}, "etl/transform.py:10": {"id": "etl/transform.py:10", "file": "etl/transform.py", "line": 10, "end": 10, "full_end": 16, "kind": "def", "scope": "etl.transform:<module>", "writes": ["daily_summary"], "names": {"daily_summary": {"kind": "function", "where": "etl/transform.py:10", "id": "etl.transform:daily_summary"}}, "defines": "etl.transform:daily_summary", "doc": "One row per station per day: min, max, mean temperature.", "group": "definition", "blocks": {"body": ["etl/transform.py:12", "etl/transform.py:13", "etl/transform.py:15", "etl/transform.py:16"]}}, "etl/transform.py:12": {"id": "etl/transform.py:12", "file": "etl/transform.py", "line": 12, "end": 12, "full_end": 12, "kind": "assign", "scope": "etl.transform:daily_summary", "parent": "etl/transform.py:10", "block": "body", "reads": ["df"], "writes": ["df"], "names": {"df": {"kind": "parameter"}}, "calls": [{"call": "df.assign", "origin": "method", "on": "df"}]}, "etl/transform.py:13": {"id": "etl/transform.py:13", "file": "etl/transform.py", "line": 13, "end": 14, "full_end": 14, "kind": "assign", "scope": "etl.transform:daily_summary", "parent": "etl/transform.py:10", "block": "body", "reads": ["df"], "writes": ["out"], "names": {"df": {"kind": "parameter"}, "out": {"kind": "local"}}, "calls": [{"call": "df.groupby", "origin": "method", "on": "df"}, {"call": "?().reset_index", "origin": "unknown"}]}, "etl/transform.py:15": {"id": "etl/transform.py:15", "file": "etl/transform.py", "line": 15, "end": 15, "full_end": 15, "kind": "assign", "scope": "etl.transform:daily_summary", "parent": "etl/transform.py:10", "block": "body", "reads": ["out"], "mutates": ["out"], "names": {"out": {"kind": "local"}}}, "etl/transform.py:16": {"id": "etl/transform.py:16", "file": "etl/transform.py", "line": 16, "end": 16, "full_end": 16, "kind": "return", "scope": "etl.transform:daily_summary", "parent": "etl/transform.py:10", "block": "body", "reads": ["out"], "names": {"out": {"kind": "local"}}}, "etl/transform.py:19": {"id": "etl/transform.py:19", "file": "etl/transform.py", "line": 19, "end": 19, "full_end": 23, "kind": "def", "scope": "etl.transform:<module>", "writes": ["flag_anomalies"], "names": {"flag_anomalies": {"kind": "function", "where": "etl/transform.py:19", "id": "etl.transform:flag_anomalies"}}, "defines": "etl.transform:flag_anomalies", "doc": "Stations whose daily mean is far from their region's mean.", "group": "definition", "blocks": {"body": ["etl/transform.py:21", "etl/transform.py:22", "etl/transform.py:23"]}}, "etl/transform.py:21": {"id": "etl/transform.py:21", "file": "etl/transform.py", "line": 21, "end": 21, "full_end": 21, "kind": "assign", "scope": "etl.transform:flag_anomalies", "parent": "etl/transform.py:19", "block": "body", "reads": ["summary"], "writes": ["g"], "names": {"summary": {"kind": "parameter"}, "g": {"kind": "local"}}, "calls": [{"call": "summary.groupby", "origin": "method", "on": "summary"}]}, "etl/transform.py:22": {"id": "etl/transform.py:22", "file": "etl/transform.py", "line": 22, "end": 22, "full_end": 22, "kind": "assign", "scope": "etl.transform:flag_anomalies", "parent": "etl/transform.py:19", "block": "body", "reads": ["summary", "np", "g"], "writes": ["z"], "names": {"summary": {"kind": "parameter"}, "np": {"kind": "import_package", "from": "numpy", "package": "numpy"}, "g": {"kind": "local"}, "z": {"kind": "local"}}, "calls": [{"call": "g.transform", "origin": "method", "on": "g"}, {"call": "g.transform().replace", "origin": "method", "on": "g"}]}, "etl/transform.py:23": {"id": "etl/transform.py:23", "file": "etl/transform.py", "line": 23, "end": 23, "full_end": 23, "kind": "return", "scope": "etl.transform:flag_anomalies", "parent": "etl/transform.py:19", "block": "body", "reads": ["summary", "ANOMALY_Z", "z"], "names": {"summary": {"kind": "parameter"}, "ANOMALY_Z": {"kind": "import_project", "from": "config.ANOMALY_Z", "where": "config.py:9", "what": "constant", "value": "1.4"}, "z": {"kind": "local"}}, "calls": [{"call": "z.abs", "origin": "method", "on": "z"}]}, "etl/load.py:1": {"id": "etl/load.py:1", "file": "etl/load.py", "line": 1, "end": 1, "full_end": 1, "kind": "import", "scope": "etl.load:<module>", "writes": ["os"], "names": {"os": {"kind": "import_stdlib", "from": "os", "package": "os"}}, "group": "import"}, "etl/load.py:2": {"id": "etl/load.py:2", "file": "etl/load.py", "line": 2, "end": 2, "full_end": 2, "kind": "import", "scope": "etl.load:<module>", "writes": ["sqlite3"], "names": {"sqlite3": {"kind": "import_stdlib", "from": "sqlite3", "package": "sqlite3"}}, "group": "import"}, "etl/load.py:3": {"id": "etl/load.py:3", "file": "etl/load.py", "line": 3, "end": 3, "full_end": 3, "kind": "import", "scope": "etl.load:<module>", "writes": ["requests"], "names": {"requests": {"kind": "import_package", "from": "requests", "package": "requests"}}, "group": "import"}, "etl/load.py:4": {"id": "etl/load.py:4", "file": "etl/load.py", "line": 4, "end": 4, "full_end": 4, "kind": "import", "scope": "etl.load:<module>", "writes": ["OUTPUT_DIR", "STATIONS_DB", "ALERT_WEBHOOK"], "names": {"OUTPUT_DIR": {"kind": "import_project", "from": "config.OUTPUT_DIR", "where": "config.py:6", "what": "constant", "value": "'output'"}, "STATIONS_DB": {"kind": "import_project", "from": "config.STATIONS_DB", "where": "config.py:5", "what": "constant", "value": "'data/stations.db'"}, "ALERT_WEBHOOK": {"kind": "import_project", "from": "config.ALERT_WEBHOOK", "where": "config.py:10", "what": "constant", "value": "os.getenv(\"ALERT_WEBHOOK\", \"https://hooks.example.com/weather-alerts\")"}}, "imports_modules": ["config"], "group": "import"}, "etl/load.py:7": {"id": "etl/load.py:7", "file": "etl/load.py", "line": 7, "end": 7, "full_end": 11, "kind": "def", "scope": "etl.load:<module>", "writes": ["write_report"], "names": {"write_report": {"kind": "function", "where": "etl/load.py:7", "id": "etl.load:write_report"}}, "defines": "etl.load:write_report", "group": "definition", "blocks": {"body": ["etl/load.py:8", "etl/load.py:9", "etl/load.py:10", "etl/load.py:11"]}}, "etl/load.py:8": {"id": "etl/load.py:8", "file": "etl/load.py", "line": 8, "end": 8, "full_end": 8, "kind": "call", "scope": "etl.load:write_report", "parent": "etl/load.py:7", "block": "body", "reads": ["OUTPUT_DIR", "os"], "names": {"OUTPUT_DIR": {"kind": "import_project", "from": "config.OUTPUT_DIR", "where": "config.py:6", "what": "constant", "value": "'output'"}, "os": {"kind": "import_stdlib", "from": "os", "package": "os"}}, "calls": [{"call": "os.makedirs", "origin": "stdlib", "package": "os", "qualified": "os.makedirs"}]}, "etl/load.py:9": {"id": "etl/load.py:9", "file": "etl/load.py", "line": 9, "end": 9, "full_end": 9, "kind": "assign", "scope": "etl.load:write_report", "parent": "etl/load.py:7", "block": "body", "reads": ["OUTPUT_DIR", "os", "run_date"], "writes": ["path"], "names": {"OUTPUT_DIR": {"kind": "import_project", "from": "config.OUTPUT_DIR", "where": "config.py:6", "what": "constant", "value": "'output'"}, "os": {"kind": "import_stdlib", "from": "os", "package": "os"}, "run_date": {"kind": "parameter"}, "path": {"kind": "local"}}, "calls": [{"call": "os.path.join", "origin": "stdlib", "package": "os", "qualified": "os.path.join"}]}, "etl/load.py:10": {"id": "etl/load.py:10", "file": "etl/load.py", "line": 10, "end": 10, "full_end": 10, "kind": "call", "scope": "etl.load:write_report", "parent": "etl/load.py:7", "block": "body", "reads": ["path", "summary"], "names": {"path": {"kind": "local"}, "summary": {"kind": "parameter"}}, "calls": [{"call": "summary.to_csv", "origin": "method", "on": "summary"}], "io": [{"line": 10, "call": "summary.to_csv", "direction": "write", "kind": "file", "target": "path"}]}, "etl/load.py:11": {"id": "etl/load.py:11", "file": "etl/load.py", "line": 11, "end": 11, "full_end": 11, "kind": "return", "scope": "etl.load:write_report", "parent": "etl/load.py:7", "block": "body", "reads": ["path"], "names": {"path": {"kind": "local"}}}, "etl/load.py:14": {"id": "etl/load.py:14", "file": "etl/load.py", "line": 14, "end": 14, "full_end": 19, "kind": "def", "scope": "etl.load:<module>", "writes": ["save_summary"], "names": {"save_summary": {"kind": "function", "where": "etl/load.py:14", "id": "etl.load:save_summary"}}, "defines": "etl.load:save_summary", "group": "definition", "blocks": {"body": ["etl/load.py:15"]}}, "etl/load.py:15": {"id": "etl/load.py:15", "file": "etl/load.py", "line": 15, "end": 15, "full_end": 19, "kind": "with", "scope": "etl.load:save_summary", "parent": "etl/load.py:14", "block": "body", "reads": ["STATIONS_DB", "sqlite3"], "writes": ["conn"], "names": {"STATIONS_DB": {"kind": "import_project", "from": "config.STATIONS_DB", "where": "config.py:5", "what": "constant", "value": "'data/stations.db'"}, "sqlite3": {"kind": "import_stdlib", "from": "sqlite3", "package": "sqlite3"}, "conn": {"kind": "local"}}, "calls": [{"call": "sqlite3.connect", "origin": "stdlib", "package": "sqlite3", "qualified": "sqlite3.connect"}], "io": [{"line": 15, "call": "sqlite3.connect", "direction": "connect", "kind": "database", "target": "STATIONS_DB"}], "blocks": {"body": ["etl/load.py:16", "etl/load.py:18", "etl/load.py:19"]}}, "etl/load.py:16": {"id": "etl/load.py:16", "file": "etl/load.py", "line": 16, "end": 16, "full_end": 17, "kind": "if", "scope": "etl.load:save_summary", "parent": "etl/load.py:15", "block": "body", "reads": ["full_refresh"], "names": {"full_refresh": {"kind": "parameter"}}, "blocks": {"body": ["etl/load.py:17"]}}, "etl/load.py:17": {"id": "etl/load.py:17", "file": "etl/load.py", "line": 17, "end": 17, "full_end": 17, "kind": "call", "scope": "etl.load:save_summary", "parent": "etl/load.py:16", "block": "body", "reads": ["conn"], "names": {"conn": {"kind": "local"}}, "calls": [{"call": "conn.execute", "origin": "method", "on": "conn"}], "io": [{"line": 17, "call": "conn.execute", "direction": "write", "kind": "database", "target": "DELETE FROM daily_summary"}]}, "etl/load.py:18": {"id": "etl/load.py:18", "file": "etl/load.py", "line": 18, "end": 18, "full_end": 18, "kind": "call", "scope": "etl.load:save_summary", "parent": "etl/load.py:15", "block": "body", "reads": ["conn", "summary", "str"], "names": {"conn": {"kind": "local"}, "summary": {"kind": "parameter"}, "str": {"kind": "builtin"}}, "calls": [{"call": "summary.assign", "origin": "method", "on": "summary"}, {"call": "summary.assign().to_sql", "origin": "method", "on": "summary"}], "io": [{"line": 18, "call": "summary.assign().to_sql", "direction": "write", "kind": "database", "target": "daily_summary"}]}, "etl/load.py:19": {"id": "etl/load.py:19", "file": "etl/load.py", "line": 19, "end": 19, "full_end": 19, "kind": "return", "scope": "etl.load:save_summary", "parent": "etl/load.py:15", "block": "body", "reads": ["len", "summary"], "names": {"len": {"kind": "builtin"}, "summary": {"kind": "parameter"}}, "calls": [{"call": "len", "origin": "builtin"}]}, "etl/load.py:22": {"id": "etl/load.py:22", "file": "etl/load.py", "line": 22, "end": 22, "full_end": 26, "kind": "def", "scope": "etl.load:<module>", "writes": ["send_alert"], "names": {"send_alert": {"kind": "function", "where": "etl/load.py:22", "id": "etl.load:send_alert"}}, "defines": "etl.load:send_alert", "group": "definition", "blocks": {"body": ["etl/load.py:23", "etl/load.py:25", "etl/load.py:26"]}}, "etl/load.py:23": {"id": "etl/load.py:23", "file": "etl/load.py", "line": 23, "end": 24, "full_end": 24, "kind": "assign", "scope": "etl.load:send_alert", "parent": "etl/load.py:22", "block": "body", "reads": ["len", "anomalies"], "writes": ["payload"], "names": {"len": {"kind": "builtin"}, "anomalies": {"kind": "parameter"}, "payload": {"kind": "local"}}, "calls": [{"call": "len", "origin": "builtin"}]}, "etl/load.py:25": {"id": "etl/load.py:25", "file": "etl/load.py", "line": 25, "end": 25, "full_end": 25, "kind": "assign", "scope": "etl.load:send_alert", "parent": "etl/load.py:22", "block": "body", "reads": ["ALERT_WEBHOOK", "requests", "payload"], "writes": ["r"], "names": {"ALERT_WEBHOOK": {"kind": "import_project", "from": "config.ALERT_WEBHOOK", "where": "config.py:10", "what": "constant", "value": "os.getenv(\"ALERT_WEBHOOK\", \"https://hooks.example.com/weather-alerts\")"}, "requests": {"kind": "import_package", "from": "requests", "package": "requests"}, "payload": {"kind": "local"}, "r": {"kind": "local"}}, "calls": [{"call": "requests.post", "origin": "package", "package": "requests", "qualified": "requests.post"}], "io": [{"line": 25, "call": "requests.post", "direction": "write", "kind": "api", "target": "ALERT_WEBHOOK"}]}, "etl/load.py:26": {"id": "etl/load.py:26", "file": "etl/load.py", "line": 26, "end": 26, "full_end": 26, "kind": "return", "scope": "etl.load:send_alert", "parent": "etl/load.py:22", "block": "body", "reads": ["r"], "names": {"r": {"kind": "local"}}}}, "docstrings": {"main:<module>": "Daily weather pipeline: readings CSV -> clean -> summarize -> report + DB + alerts.", "config:<module>": "Settings for the daily weather pipeline.", "etl.extract:read_readings": "Load raw sensor readings from the daily CSV drop.", "etl.extract:load_stations": "Fetch station metadata (name, region, elevation).", "etl.clean:to_celsius": "Some stations report Fahrenheit; convert them.", "etl.clean:drop_invalid": "Remove missing values and physically impossible temperatures.", "etl.clean:dedupe": "Sensors sometimes resend a reading; keep the first.", "etl.transform:enrich": "Attach station name and region to every reading.", "etl.transform:daily_summary": "One row per station per day: min, max, mean temperature.", "etl.transform:flag_anomalies": "Stations whose daily mean is far from their region's mean."}, "steps": [{"type": "group", "file": "main.py", "lines": [2, 6], "call": 1, "depth": 0, "executions": 1, "stmts": ["main.py:2", "main.py:3", "main.py:4", "main.py:6"], "id": "s1"}, {"type": "enter", "fn": "config:<module>", "call": 2, "depth": 1, "caller": "main:<module>", "from_step": "s1", "args": {}, "id": "s2"}, {"type": "statement", "stmt": "config.py:2", "file": "config.py", "lines": [2, 2], "call": 2, "depth": 1, "occurrence": 1, "executions": 1, "id": "s3"}, {"type": "group", "file": "config.py", "lines": [4, 9], "call": 2, "depth": 1, "executions": 1, "changes": {"INPUT_CSV": {"type": "str", "len": 17, "value": "data/readings.csv"}, "STATIONS_DB": {"type": "str", "len": 16, "value": "data/stations.db"}, "OUTPUT_DIR": {"type": "str", "len": 6, "value": "output"}, "MIN_TEMP_C": {"type": "float", "value": "-40.0"}, "MAX_TEMP_C": {"type": "float", "value": "55.0"}, "ANOMALY_Z": {"type": "float", "value": "1.4"}}, "stmts": ["config.py:4", "config.py:5", "config.py:6", "config.py:7", "config.py:8", "config.py:9"], "id": "s4"}, {"type": "statement", "stmt": "config.py:10", "file": "config.py", "lines": [10, 10], "call": 2, "depth": 1, "occurrence": 1, "executions": 1, "changes": {"ALERT_WEBHOOK": {"type": "str", "len": 40, "value": "https://hooks.example.com/weather-alerts"}}, "id": "s5"}, {"type": "statement", "stmt": "config.py:11", "file": "config.py", "lines": [11, 11], "call": 2, "depth": 1, "occurrence": 1, "executions": 1, "changes": {"API_TOKEN": {"type": "str", "value": "***"}}, "id": "s6"}, {"type": "return", "fn": "config:<module>", "call": 2, "depth": 1, "to": "main:<module>", "to_step": "s1", "changes": {"INPUT_CSV": {"type": "str", "len": 17, "value": "data/readings.csv"}, "STATIONS_DB": {"type": "str", "len": 16, "value": "data/stations.db"}}, "changes_of": "s1", "id": "s7"}, {"type": "statement", "stmt": "main.py:7", "file": "main.py", "lines": [7, 7], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "id": "s8"}, {"type": "enter", "fn": "etl.extract:<module>", "call": 4, "depth": 1, "caller": "main:<module>", "from_step": "s8", "args": {}, "id": "s9"}, {"type": "group", "file": "etl/extract.py", "lines": [1, 2], "call": 4, "depth": 1, "executions": 1, "stmts": ["etl/extract.py:1", "etl/extract.py:2"], "id": "s10"}, {"type": "group", "file": "etl/extract.py", "lines": [5, 11], "call": 4, "depth": 1, "executions": 1, "stmts": ["etl/extract.py:5", "etl/extract.py:11"], "id": "s11"}, {"type": "return", "fn": "etl.extract:<module>", "call": 4, "depth": 1, "to": "main:<module>", "to_step": "s8", "id": "s12"}, {"type": "statement", "stmt": "main.py:8", "file": "main.py", "lines": [8, 8], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "id": "s13"}, {"type": "enter", "fn": "etl.clean:<module>", "call": 5, "depth": 1, "caller": "main:<module>", "from_step": "s13", "args": {}, "id": "s14"}, {"type": "statement", "stmt": "etl/clean.py:1", "file": "etl/clean.py", "lines": [1, 1], "call": 5, "depth": 1, "occurrence": 1, "executions": 1, "changes": {"MIN_TEMP_C": {"type": "float", "value": "-40.0"}, "MAX_TEMP_C": {"type": "float", "value": "55.0"}}, "id": "s15"}, {"type": "group", "file": "etl/clean.py", "lines": [4, 24], "call": 5, "depth": 1, "executions": 1, "stmts": ["etl/clean.py:4", "etl/clean.py:13", "etl/clean.py:19", "etl/clean.py:24"], "id": "s16"}, {"type": "return", "fn": "etl.clean:<module>", "call": 5, "depth": 1, "to": "main:<module>", "to_step": "s13", "id": "s17"}, {"type": "statement", "stmt": "main.py:9", "file": "main.py", "lines": [9, 9], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "id": "s18"}, {"type": "enter", "fn": "etl.transform:<module>", "call": 6, "depth": 1, "caller": "main:<module>", "from_step": "s18", "args": {}, "id": "s19"}, {"type": "group", "file": "etl/transform.py", "lines": [1, 2], "call": 6, "depth": 1, "executions": 1, "stmts": ["etl/transform.py:1", "etl/transform.py:2"], "changes": {"ANOMALY_Z": {"type": "float", "value": "1.4"}}, "id": "s20"}, {"type": "group", "file": "etl/transform.py", "lines": [5, 19], "call": 6, "depth": 1, "executions": 1, "stmts": ["etl/transform.py:5", "etl/transform.py:10", "etl/transform.py:19"], "id": "s21"}, {"type": "return", "fn": "etl.transform:<module>", "call": 6, "depth": 1, "to": "main:<module>", "to_step": "s18", "id": "s22"}, {"type": "statement", "stmt": "main.py:10", "file": "main.py", "lines": [10, 10], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "id": "s23"}, {"type": "enter", "fn": "etl.load:<module>", "call": 7, "depth": 1, "caller": "main:<module>", "from_step": "s23", "args": {}, "id": "s24"}, {"type": "group", "file": "etl/load.py", "lines": [1, 4], "call": 7, "depth": 1, "executions": 1, "stmts": ["etl/load.py:1", "etl/load.py:2", "etl/load.py:3", "etl/load.py:4"], "changes": {"OUTPUT_DIR": {"type": "str", "len": 6, "value": "output"}, "STATIONS_DB": {"type": "str", "len": 16, "value": "data/stations.db"}, "ALERT_WEBHOOK": {"type": "str", "len": 40, "value": "https://hooks.example.com/weather-alerts"}}, "id": "s25"}, {"type": "group", "file": "etl/load.py", "lines": [7, 22], "call": 7, "depth": 1, "executions": 1, "stmts": ["etl/load.py:7", "etl/load.py:14", "etl/load.py:22"], "id": "s26"}, {"type": "return", "fn": "etl.load:<module>", "call": 7, "depth": 1, "to": "main:<module>", "to_step": "s23", "id": "s27"}, {"type": "statement", "stmt": "main.py:12", "file": "main.py", "lines": [12, 12], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "id": "s28"}, {"type": "statement", "stmt": "main.py:13", "file": "main.py", "lines": [13, 13], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "changes": {"log": {"type": "logging.Logger", "attrs": ["filters", "name", "level", "parent", "propagate", "handlers", "disabled", "_cache", "manager"]}}, "id": "s29"}, {"type": "group", "file": "main.py", "lines": [16, 24], "call": 1, "depth": 0, "executions": 1, "stmts": ["main.py:16", "main.py:24"], "id": "s30"}, {"type": "statement", "stmt": "main.py:45", "file": "main.py", "lines": [45, 45], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "branch": {"taken": "body"}, "id": "s31"}, {"type": "statement", "stmt": "main.py:46", "file": "main.py", "lines": [46, 46], "call": 1, "depth": 0, "occurrence": 1, "executions": 1, "id": "s32"}, {"type": "enter", "fn": "main:main", "call": 8, "depth": 1, "caller": "main:<module>", "from_step": "s32", "args": {}, "id": "s33"}, {"type": "statement", "stmt": "main.py:25", "file": "main.py", "lines": [25, 25], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s34"}, {"type": "enter", "fn": "main:parse_args", "call": 9, "depth": 2, "caller": "main:main", "from_step": "s34", "args": {}, "id": "s35"}, {"type": "statement", "stmt": "main.py:17", "file": "main.py", "lines": [17, 17], "call": 9, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"p": {"type": "argparse.ArgumentParser", "attrs": ["description", "argument_default", "prefix_chars", "conflict_handler", "_registries", "_actions", "_option_string_actions", "_action_groups", "_mutually_exclusive_groups", "_defaults", "_negative_number_matcher", "_has_negative_number_optionals"]}}, "id": "s36"}, {"type": "statement", "stmt": "main.py:18", "file": "main.py", "lines": [18, 18], "call": 9, "depth": 2, "occurrence": 1, "executions": 1, "id": "s37"}, {"type": "statement", "stmt": "main.py:19", "file": "main.py", "lines": [19, 19], "call": 9, "depth": 2, "occurrence": 1, "executions": 1, "id": "s38"}, {"type": "statement", "stmt": "main.py:20", "file": "main.py", "lines": [20, 20], "call": 9, "depth": 2, "occurrence": 1, "executions": 1, "id": "s39"}, {"type": "statement", "stmt": "main.py:21", "file": "main.py", "lines": [21, 21], "call": 9, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "argparse.Namespace", "attrs": ["date", "full_refresh", "no_alerts"]}, "id": "s40"}, {"type": "return", "fn": "main:parse_args", "call": 9, "depth": 2, "to": "main:main", "to_step": "s34", "value": {"type": "argparse.Namespace", "attrs": ["date", "full_refresh", "no_alerts"]}, "changes": {"args": {"type": "argparse.Namespace", "attrs": ["date", "full_refresh", "no_alerts"]}}, "changes_of": "s34", "id": "s41"}, {"type": "statement", "stmt": "main.py:26", "file": "main.py", "lines": [26, 26], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s42"}, {"type": "enter", "fn": "etl.extract:read_readings", "call": 10, "depth": 2, "caller": "main:main", "from_step": "s42", "args": {"path": {"type": "str", "len": 17, "value": "data/readings.csv"}}, "id": "s43"}, {"type": "statement", "stmt": "etl/extract.py:7", "file": "etl/extract.py", "lines": [7, 7], "call": 10, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "io": [{"seq": 1, "kind": "file", "op": "read", "target": "data/readings.csv", "count": 1}], "id": "s44"}, {"type": "statement", "stmt": "etl/extract.py:8", "file": "etl/extract.py", "lines": [8, 8], "call": 10, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "id": "s45"}, {"type": "return", "fn": "etl.extract:read_readings", "call": 10, "depth": 2, "to": "main:main", "to_step": "s42", "value": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "changes": {"raw": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "changes_of": "s42", "id": "s46"}, {"type": "statement", "stmt": "main.py:27", "file": "main.py", "lines": [27, 27], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s47"}, {"type": "enter", "fn": "etl.extract:load_stations", "call": 11, "depth": 2, "caller": "main:main", "from_step": "s47", "args": {"db_path": {"type": "str", "len": 16, "value": "data/stations.db"}}, "id": "s48"}, {"type": "statement", "stmt": "etl/extract.py:13", "file": "etl/extract.py", "lines": [13, 13], "call": 11, "depth": 2, "occurrence": 1, "executions": 2, "changes": {"conn": {"type": "sqlite3.Connection"}}, "io": [{"seq": 2, "kind": "database", "op": "connect", "target": "sqlite:data/stations.db", "handled": "working-copy", "count": 1}], "id": "s49"}, {"type": "statement", "stmt": "etl/extract.py:14", "file": "etl/extract.py", "lines": [14, 14], "call": 11, "depth": 2, "occurrence": 1, "executions": 1, "io": [{"seq": 3, "kind": "database", "op": "read", "target": "sqlite:data/stations.db / stations", "handled": "working-copy", "count": 1}], "value": {"type": "DataFrame", "rows": 12, "cols": 4, "columns": ["station_id", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "name", "region", "elevation_m"], "rows": [["ST01", "Ridge Point", "North", "820"], ["ST02", "Lakeside", "North", "210"], ["ST03", "Old Mill", "North", "340"]]}}, "id": "s50"}, {"type": "return", "fn": "etl.extract:load_stations", "call": 11, "depth": 2, "to": "main:main", "to_step": "s47", "value": {"type": "DataFrame", "rows": 12, "cols": 4, "columns": ["station_id", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "name", "region", "elevation_m"], "rows": [["ST01", "Ridge Point", "North", "820"], ["ST02", "Lakeside", "North", "210"], ["ST03", "Old Mill", "North", "340"]]}}, "changes": {"stations": {"type": "DataFrame", "rows": 12, "cols": 4, "columns": ["station_id", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "name", "region", "elevation_m"], "rows": [["ST01", "Ridge Point", "North", "820"], ["ST02", "Lakeside", "North", "210"], ["ST03", "Old Mill", "North", "340"]]}}}, "changes_of": "s47", "id": "s51"}, {"type": "statement", "stmt": "main.py:28", "file": "main.py", "lines": [28, 28], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s52"}, {"type": "statement", "stmt": "main.py:30", "file": "main.py", "lines": [30, 30], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s53"}, {"type": "enter", "fn": "etl.clean:clean", "call": 12, "depth": 2, "caller": "main:main", "from_step": "s53", "args": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "id": "s54"}, {"type": "statement", "stmt": "etl/clean.py:25", "file": "etl/clean.py", "lines": [25, 25], "call": 12, "depth": 2, "occurrence": 1, "executions": 4, "loop": {"iterations": 3}, "id": "s55"}, {"type": "statement", "stmt": "etl/clean.py:26", "file": "etl/clean.py", "lines": [26, 26], "call": 12, "depth": 2, "occurrence": 1, "executions": 3, "id": "s56"}, {"type": "enter", "fn": "etl.clean:to_celsius", "call": 13, "depth": 3, "caller": "etl.clean:clean", "from_step": "s56", "args": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "id": "s57"}, {"type": "statement", "stmt": "etl/clean.py:6", "file": "etl/clean.py", "lines": [6, 6], "call": 13, "depth": 3, "occurrence": 1, "executions": 1, "changes": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "id": "s58"}, {"type": "statement", "stmt": "etl/clean.py:7", "file": "etl/clean.py", "lines": [7, 7], "call": 13, "depth": 3, "occurrence": 1, "executions": 1, "changes": {"f": {"type": "Series", "rows": 601, "name": "unit", "dtype": "bool", "sample": ["False", "False", "False", "False", "False"]}}, "id": "s59"}, {"type": "statement", "stmt": "etl/clean.py:8", "file": "etl/clean.py", "lines": [8, 8], "call": 13, "depth": 3, "occurrence": 1, "executions": 1, "changes": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}, "in_place": true}}, "id": "s60"}, {"type": "statement", "stmt": "etl/clean.py:9", "file": "etl/clean.py", "lines": [9, 9], "call": 13, "depth": 3, "occurrence": 1, "executions": 1, "changes": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}, "in_place": true}}, "id": "s61"}, {"type": "statement", "stmt": "etl/clean.py:10", "file": "etl/clean.py", "lines": [10, 10], "call": 13, "depth": 3, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "id": "s62"}, {"type": "return", "fn": "etl.clean:to_celsius", "call": 13, "depth": 3, "to": "etl.clean:clean", "to_step": "s56", "value": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "changes": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "changes_of": "s56", "id": "s63"}, {"type": "statement", "stmt": "etl/clean.py:25", "file": "etl/clean.py", "lines": [25, 25], "call": 12, "depth": 2, "occurrence": 2, "executions": 4, "id": "s64"}, {"type": "statement", "stmt": "etl/clean.py:26", "file": "etl/clean.py", "lines": [26, 26], "call": 12, "depth": 2, "occurrence": 2, "executions": 3, "id": "s65"}, {"type": "enter", "fn": "etl.clean:drop_invalid", "call": 14, "depth": 3, "caller": "etl.clean:clean", "from_step": "s65", "args": {"df": {"type": "DataFrame", "rows": 601, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "id": "s66"}, {"type": "statement", "stmt": "etl/clean.py:15", "file": "etl/clean.py", "lines": [15, 15], "call": 14, "depth": 3, "occurrence": 1, "executions": 1, "changes": {"df": {"type": "DataFrame", "rows": 582, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "id": "s67"}, {"type": "statement", "stmt": "etl/clean.py:16", "file": "etl/clean.py", "lines": [16, 16], "call": 14, "depth": 3, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 576, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "id": "s68"}, {"type": "return", "fn": "etl.clean:drop_invalid", "call": 14, "depth": 3, "to": "etl.clean:clean", "to_step": "s65", "value": {"type": "DataFrame", "rows": 576, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "changes": {"df": {"type": "DataFrame", "rows": 576, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "changes_of": "s65", "id": "s69"}, {"type": "statement", "stmt": "etl/clean.py:25", "file": "etl/clean.py", "lines": [25, 25], "call": 12, "depth": 2, "occurrence": 3, "executions": 4, "id": "s70"}, {"type": "statement", "stmt": "etl/clean.py:26", "file": "etl/clean.py", "lines": [26, 26], "call": 12, "depth": 2, "occurrence": 3, "executions": 3, "id": "s71"}, {"type": "enter", "fn": "etl.clean:dedupe", "call": 15, "depth": 3, "caller": "etl.clean:clean", "from_step": "s71", "args": {"df": {"type": "DataFrame", "rows": 576, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "id": "s72"}, {"type": "statement", "stmt": "etl/clean.py:21", "file": "etl/clean.py", "lines": [21, 21], "call": 15, "depth": 3, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "id": "s73"}, {"type": "return", "fn": "etl.clean:dedupe", "call": 15, "depth": 3, "to": "etl.clean:clean", "to_step": "s71", "value": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "changes": {"df": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "changes_of": "s71", "id": "s74"}, {"type": "statement", "stmt": "etl/clean.py:27", "file": "etl/clean.py", "lines": [27, 27], "call": 12, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "id": "s75"}, {"type": "return", "fn": "etl.clean:clean", "call": 12, "depth": 2, "to": "main:main", "to_step": "s53", "value": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "changes": {"readings": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}}, "changes_of": "s53", "id": "s76"}, {"type": "statement", "stmt": "main.py:31", "file": "main.py", "lines": [31, 31], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s77"}, {"type": "enter", "fn": "etl.transform:enrich", "call": 16, "depth": 2, "caller": "main:main", "from_step": "s77", "args": {"df": {"type": "DataFrame", "rows": 552, "cols": 4, "columns": ["station_id", "timestamp", "temp", "unit"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C"], ["ST01", "2026-09-30 07:00:00", "5.5", "C"], ["ST07", "2026-09-30 04:00:00", "17.1", "C"]]}}, "stations": {"type": "DataFrame", "rows": 12, "cols": 4, "columns": ["station_id", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "name", "region", "elevation_m"], "rows": [["ST01", "Ridge Point", "North", "820"], ["ST02", "Lakeside", "North", "210"], ["ST03", "Old Mill", "North", "340"]]}}}, "id": "s78"}, {"type": "statement", "stmt": "etl/transform.py:7", "file": "etl/transform.py", "lines": [7, 7], "call": 16, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 552, "cols": 7, "columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C", "Canyon Floor", "South", "410"], ["ST01", "2026-09-30 07:00:00", "5.5", "C", "Ridge Point", "North", "820"], ["ST07", "2026-09-30 04:00:00", "17.1", "C", "Dune Field", "South", "150"]]}}, "id": "s79"}, {"type": "return", "fn": "etl.transform:enrich", "call": 16, "depth": 2, "to": "main:main", "to_step": "s77", "value": {"type": "DataFrame", "rows": 552, "cols": 7, "columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C", "Canyon Floor", "South", "410"], ["ST01", "2026-09-30 07:00:00", "5.5", "C", "Ridge Point", "North", "820"], ["ST07", "2026-09-30 04:00:00", "17.1", "C", "Dune Field", "South", "150"]]}}, "changes_of": "s77", "id": "s80"}, {"type": "enter", "fn": "etl.transform:daily_summary", "call": 17, "depth": 2, "caller": "main:main", "from_step": "s77", "args": {"df": {"type": "DataFrame", "rows": 552, "cols": 7, "columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str", "name": "str", "region": "str", "elevation_m": "int64"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C", "Canyon Floor", "South", "410"], ["ST01", "2026-09-30 07:00:00", "5.5", "C", "Ridge Point", "North", "820"], ["ST07", "2026-09-30 04:00:00", "17.1", "C", "Dune Field", "South", "150"]]}}}, "id": "s81"}, {"type": "statement", "stmt": "etl/transform.py:12", "file": "etl/transform.py", "lines": [12, 12], "call": 17, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"df": {"type": "DataFrame", "rows": 552, "cols": 8, "columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m", "day"], "dtypes": {"station_id": "str", "timestamp": "datetime64[us]", "temp": "float64", "unit": "str", "name": "str", "region": "str", "elevation_m": "int64", "day": "object"}, "sample": {"columns": ["station_id", "timestamp", "temp", "unit", "name", "region", "elevation_m", "day"], "rows": [["ST09", "2026-09-30 18:00:00", "26.2", "C", "Canyon Floor", "South", "410", "2026-09-30"], ["ST01", "2026-09-30 07:00:00", "5.5", "C", "Ridge Point", "North", "820", "2026-09-30"], ["ST07", "2026-09-30 04:00:00", "17.1", "C", "Dune Field", "South", "150", "2026-09-30"]]}}}, "id": "s82"}, {"type": "statement", "stmt": "etl/transform.py:13", "file": "etl/transform.py", "lines": [13, 14], "call": 17, "depth": 2, "occurrence": 1, "executions": 2, "changes": {"out": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.866666666666667", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.9624999999999995", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.121739130434783", "23"]]}}}, "id": "s83"}, {"type": "statement", "stmt": "etl/transform.py:15", "file": "etl/transform.py", "lines": [15, 15], "call": 17, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"out": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}, "in_place": true}}, "id": "s84"}, {"type": "statement", "stmt": "etl/transform.py:16", "file": "etl/transform.py", "lines": [16, 16], "call": 17, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}}, "id": "s85"}, {"type": "return", "fn": "etl.transform:daily_summary", "call": 17, "depth": 2, "to": "main:main", "to_step": "s77", "value": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}}, "changes": {"summary": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}}}, "changes_of": "s77", "id": "s86"}, {"type": "statement", "stmt": "main.py:32", "file": "main.py", "lines": [32, 32], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s87"}, {"type": "enter", "fn": "etl.transform:flag_anomalies", "call": 18, "depth": 2, "caller": "main:main", "from_step": "s87", "args": {"summary": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}}}, "id": "s88"}, {"type": "statement", "stmt": "etl/transform.py:21", "file": "etl/transform.py", "lines": [21, 21], "call": 18, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"g": {"type": "pandas.api.typing.SeriesGroupBy", "attrs": ["_selection", "level", "as_index", "keys", "sort", "group_keys", "dropna", "observed", "obj", "_grouper", "exclusions"]}}, "id": "s89"}, {"type": "statement", "stmt": "etl/transform.py:22", "file": "etl/transform.py", "lines": [22, 22], "call": 18, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"z": {"type": "Series", "rows": 24, "name": "mean", "dtype": "float64", "sample": ["-0.4606614876063768", "0.02002876033071286", "0.8745892011077585", "-0.9413517355434665", "0.8745892011077585"]}}, "id": "s90"}, {"type": "statement", "stmt": "etl/transform.py:23", "file": "etl/transform.py", "lines": [23, 23], "call": 18, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "DataFrame", "rows": 3, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST03", "Old Mill", "North", "2026-10-01", "1.9", "16.2", "8.25", "22"], ["ST08", "Mesa Top", "South", "2026-09-30", "29.2", "43.8", "35.88", "23"], ["ST08", "Mesa Top", "South", "2026-10-01", "29.3", "42.2", "36.06", "24"]]}}, "id": "s91"}, {"type": "return", "fn": "etl.transform:flag_anomalies", "call": 18, "depth": 2, "to": "main:main", "to_step": "s87", "value": {"type": "DataFrame", "rows": 3, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST03", "Old Mill", "North", "2026-10-01", "1.9", "16.2", "8.25", "22"], ["ST08", "Mesa Top", "South", "2026-09-30", "29.2", "43.8", "35.88", "23"], ["ST08", "Mesa Top", "South", "2026-10-01", "29.3", "42.2", "36.06", "24"]]}}, "changes": {"anomalies": {"type": "DataFrame", "rows": 3, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST03", "Old Mill", "North", "2026-10-01", "1.9", "16.2", "8.25", "22"], ["ST08", "Mesa Top", "South", "2026-09-30", "29.2", "43.8", "35.88", "23"], ["ST08", "Mesa Top", "South", "2026-10-01", "29.3", "42.2", "36.06", "24"]]}}}, "changes_of": "s87", "id": "s92"}, {"type": "statement", "stmt": "main.py:34", "file": "main.py", "lines": [34, 34], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s93"}, {"type": "enter", "fn": "etl.load:write_report", "call": 19, "depth": 2, "caller": "main:main", "from_step": "s93", "args": {"summary": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}}, "run_date": {"type": "str", "len": 10, "value": "2026-10-01"}}, "id": "s94"}, {"type": "statement", "stmt": "etl/load.py:8", "file": "etl/load.py", "lines": [8, 8], "call": 19, "depth": 2, "occurrence": 1, "executions": 1, "io": [{"seq": 4, "kind": "file", "op": "mkdir", "target": "output", "handled": "redirected", "count": 1}], "id": "s95"}, {"type": "statement", "stmt": "etl/load.py:9", "file": "etl/load.py", "lines": [9, 9], "call": 19, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"path": {"type": "str", "len": 35, "value": "output/daily_summary_2026-10-01.csv"}}, "id": "s96"}, {"type": "statement", "stmt": "etl/load.py:10", "file": "etl/load.py", "lines": [10, 10], "call": 19, "depth": 2, "occurrence": 1, "executions": 1, "io": [{"seq": 5, "kind": "file", "op": "write", "target": "output/daily_summary_2026-10-01.csv", "handled": "redirected", "count": 1}], "id": "s97"}, {"type": "statement", "stmt": "etl/load.py:11", "file": "etl/load.py", "lines": [11, 11], "call": 19, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "str", "len": 35, "value": "output/daily_summary_2026-10-01.csv"}, "id": "s98"}, {"type": "return", "fn": "etl.load:write_report", "call": 19, "depth": 2, "to": "main:main", "to_step": "s93", "value": {"type": "str", "len": 35, "value": "output/daily_summary_2026-10-01.csv"}, "changes": {"report": {"type": "str", "len": 35, "value": "output/daily_summary_2026-10-01.csv"}}, "changes_of": "s93", "id": "s99"}, {"type": "statement", "stmt": "main.py:35", "file": "main.py", "lines": [35, 35], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s100"}, {"type": "enter", "fn": "etl.load:save_summary", "call": 20, "depth": 2, "caller": "main:main", "from_step": "s100", "args": {"summary": {"type": "DataFrame", "rows": 24, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST01", "Ridge Point", "North", "2026-09-30", "1.1", "14.6", "7.87", "24"], ["ST01", "Ridge Point", "North", "2026-10-01", "1.4", "15.5", "7.96", "24"], ["ST02", "Lakeside", "North", "2026-09-30", "0.4", "13.8", "8.12", "23"]]}}, "full_refresh": {"type": "bool", "value": "True"}}, "id": "s101"}, {"type": "statement", "stmt": "etl/load.py:15", "file": "etl/load.py", "lines": [15, 15], "call": 20, "depth": 2, "occurrence": 1, "executions": 2, "changes": {"conn": {"type": "sqlite3.Connection"}}, "io": [{"seq": 6, "kind": "database", "op": "connect", "target": "sqlite:data/stations.db", "handled": "working-copy", "count": 1}], "id": "s102"}, {"type": "statement", "stmt": "etl/load.py:16", "file": "etl/load.py", "lines": [16, 16], "call": 20, "depth": 2, "occurrence": 1, "executions": 1, "branch": {"taken": "body"}, "id": "s103"}, {"type": "statement", "stmt": "etl/load.py:17", "file": "etl/load.py", "lines": [17, 17], "call": 20, "depth": 2, "occurrence": 1, "executions": 1, "io": [{"seq": 7, "kind": "database", "op": "delete", "target": "sqlite:data/stations.db / daily_summary", "handled": "working-copy", "rows": 1, "count": 1}], "id": "s104"}, {"type": "statement", "stmt": "etl/load.py:18", "file": "etl/load.py", "lines": [18, 18], "call": 20, "depth": 2, "occurrence": 1, "executions": 1, "io": [{"seq": 8, "kind": "database", "op": "insert", "target": "sqlite:data/stations.db / daily_summary", "handled": "working-copy", "rows": 24, "count": 24}], "id": "s105"}, {"type": "statement", "stmt": "etl/load.py:19", "file": "etl/load.py", "lines": [19, 19], "call": 20, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "int", "value": "24"}, "id": "s106"}, {"type": "return", "fn": "etl.load:save_summary", "call": 20, "depth": 2, "to": "main:main", "to_step": "s100", "value": {"type": "int", "value": "24"}, "changes": {"saved": {"type": "int", "value": "24"}}, "changes_of": "s100", "id": "s107"}, {"type": "statement", "stmt": "main.py:36", "file": "main.py", "lines": [36, 36], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s108"}, {"type": "statement", "stmt": "main.py:38", "file": "main.py", "lines": [38, 38], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "branch": {"taken": "body"}, "id": "s109"}, {"type": "statement", "stmt": "main.py:39", "file": "main.py", "lines": [39, 39], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s110"}, {"type": "enter", "fn": "etl.load:send_alert", "call": 21, "depth": 2, "caller": "main:main", "from_step": "s110", "args": {"anomalies": {"type": "DataFrame", "rows": 3, "cols": 8, "columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "dtypes": {"station_id": "str", "name": "str", "region": "str", "day": "object", "min": "float64", "max": "float64", "mean": "float64", "count": "int64"}, "sample": {"columns": ["station_id", "name", "region", "day", "min", "max", "mean", "count"], "rows": [["ST03", "Old Mill", "North", "2026-10-01", "1.9", "16.2", "8.25", "22"], ["ST08", "Mesa Top", "South", "2026-09-30", "29.2", "43.8", "35.88", "23"], ["ST08", "Mesa Top", "South", "2026-10-01", "29.3", "42.2", "36.06", "24"]]}}}, "id": "s111"}, {"type": "statement", "stmt": "etl/load.py:23", "file": "etl/load.py", "lines": [23, 24], "call": 21, "depth": 2, "occurrence": 1, "executions": 2, "changes": {"payload": {"type": "dict", "len": 2, "keys": ["count", "stations"], "values": {"count": {"type": "int", "value": "3"}, "stations": {"type": "list", "len": 3, "sample": [{"type": "dict", "len": 3, "keys": ["station_id", "name", "mean"]}, {"type": "dict", "len": 3, "keys": ["station_id", "name", "mean"]}, {"type": "dict", "len": 3, "keys": ["station_id", "name", "mean"]}]}}}}, "id": "s112"}, {"type": "statement", "stmt": "etl/load.py:25", "file": "etl/load.py", "lines": [25, 25], "call": 21, "depth": 2, "occurrence": 1, "executions": 1, "changes": {"r": {"type": "requests.Response", "status": 200, "url": "https://hooks.example.com/weather-alerts", "content_type": "application/json"}}, "io": [{"seq": 9, "kind": "api", "op": "POST", "target": "https://hooks.example.com/weather-alerts", "handled": "blocked", "count": 1}], "id": "s113"}, {"type": "statement", "stmt": "etl/load.py:26", "file": "etl/load.py", "lines": [26, 26], "call": 21, "depth": 2, "occurrence": 1, "executions": 1, "value": {"type": "int", "value": "200"}, "id": "s114"}, {"type": "return", "fn": "etl.load:send_alert", "call": 21, "depth": 2, "to": "main:main", "to_step": "s110", "value": {"type": "int", "value": "200"}, "id": "s115"}, {"type": "statement", "stmt": "main.py:40", "file": "main.py", "lines": [40, 40], "call": 8, "depth": 1, "occurrence": 1, "executions": 1, "id": "s116"}, {"type": "return", "fn": "main:main", "call": 8, "depth": 1, "value": {"type": "NoneType", "value": "None"}, "to": "main:<module>", "to_step": "s32", "id": "s117"}], "explain_first": ["etl/extract.py:7", "etl/clean.py:6", "etl/clean.py:7", "etl/clean.py:8", "etl/clean.py:9", "etl/clean.py:15", "etl/transform.py:12", "etl/transform.py:13", "etl/transform.py:15", "etl/transform.py:22", "etl/load.py:23", "config.py:10", "config.py:11", "main.py:45", "main.py:46", "main.py:25", "main.py:26", "main.py:27", "etl/extract.py:13", "etl/extract.py:14", "main.py:30", "main.py:31", "main.py:32", "main.py:34", "etl/load.py:10", "main.py:35", "etl/load.py:15", "etl/load.py:16", "etl/load.py:17", "etl/load.py:18", "main.py:38", "main.py:39", "etl/load.py:25", "main.py:21", "etl/extract.py:8", "etl/clean.py:25", "etl/clean.py:10", "etl/clean.py:16", "etl/clean.py:21", "etl/clean.py:27", "etl/transform.py:7", "etl/transform.py:16", "etl/transform.py:23", "etl/load.py:11", "etl/load.py:19", "etl/load.py:26", "main.py:13", "main.py:17", "etl/transform.py:21", "etl/load.py:9", "main.py:2", "main.py:3", "main.py:4", "main.py:6", "config.py:2", "config.py:4", "config.py:5", "config.py:6", "config.py:7", "config.py:8", "config.py:9", "main.py:7", "etl/extract.py:1", "etl/extract.py:2", "etl/extract.py:5", "etl/extract.py:11", "main.py:8", "etl/clean.py:1", "etl/clean.py:4", "etl/clean.py:13", "etl/clean.py:19", "etl/clean.py:24", "main.py:9", "etl/transform.py:1", "etl/transform.py:2", "etl/transform.py:5", "etl/transform.py:10", "etl/transform.py:19", "main.py:10", "etl/load.py:1", "etl/load.py:2", "etl/load.py:3", "etl/load.py:4", "etl/load.py:7", "etl/load.py:14", "etl/load.py:22", "main.py:12", "main.py:16", "main.py:24", "main.py:18", "main.py:19", "main.py:20", "main.py:28", "etl/clean.py:26", "etl/load.py:8", "main.py:36", "main.py:40"], "explanations": {"main.py:2": {"title": "Import the tools and the settings", "text": "argparse, logging and datetime.date come from the standard library. The last import pulls INPUT_CSV and STATIONS_DB from config: the first import of a module executes it from the top, so the walkthrough steps into config.py before these names are bound."}, "config.py:4": {"title": "Define the pipeline's constants", "text": "Module-level constants: input and output locations, and the thresholds used later. MIN_TEMP_C and MAX_TEMP_C bound physically plausible readings; ANOMALY_Z is the z-score cut-off for flagging a station."}, "config.py:10": {"title": "Read the webhook URL from the environment", "text": "os.getenv returns the ALERT_WEBHOOK environment variable if it is set, otherwise the default URL. The variable wasn't set in this run, so the default was used."}, "config.py:11": {"title": "Read the API token from the environment", "text": "Same pattern as the webhook. The default is a hard-coded token, which is a security smell: a real secret should never be committed as a fallback. codestory masks its value."}, "main.py:7": {"title": "Import the extract functions", "text": "Importing etl.extract runs that module: it imports sqlite3 and pandas and defines read_readings and load_stations, which this line then binds here."}, "etl/clean.py:4": {"title": "Define the cleaning steps", "text": "Four plain functions that each take a DataFrame and return a new one, so they can be chained. clean() composes the other three."}, "main.py:12": {"title": "Configure logging", "text": "basicConfig installs a root handler that prints just the message text at INFO level and above. It only has an effect the first time it's called in a process."}, "main.py:45": {"title": "Run main() only when executed as a script", "text": "__name__ is \"__main__\" when the file is run directly (or through runpy, as codestory does), and the module's name when it's imported. This guard keeps imports side-effect free."}, "main.py:25": {"title": "Parse the command line", "text": "parse_args() builds the parser and returns an argparse.Namespace; args.date and args.full_refresh are read later to name the report and decide whether to clear the table."}, "main.py:21": {"title": "Return the parsed options", "text": "parse_args() with no argument reads sys.argv[1:]. codestory set sys.argv to this run's arguments, so the Namespace holds date=2026-10-01 and full_refresh=True."}, "main.py:26": {"title": "Load the raw readings", "text": "Calls read_readings with the CSV path from config and binds the resulting DataFrame to raw."}, "etl/extract.py:7": {"title": "Read the CSV into a DataFrame", "text": "pd.read_csv parses the file into a DataFrame; parse_dates converts the timestamp column to datetime64 so the .dt accessor works later. 601 rows, 4 columns: station_id, timestamp, temp, unit."}, "main.py:27": {"title": "Load the station metadata", "text": "Calls load_stations with the SQLite path and binds the 12-row station table to stations."}, "etl/extract.py:13": {"title": "Open the stations database", "text": "sqlite3.connect opens the file; as a context manager the connection commits (or rolls back on error) when the block exits. Note that it does not close the connection. In safe mode, codestory pointed this at a copy of the database."}, "etl/extract.py:14": {"title": "Query the stations table", "text": "pd.read_sql_query runs the SELECT on the open connection and returns the result as a DataFrame: 12 stations with name, region and elevation."}, "main.py:30": {"title": "Clean the readings", "text": "Passes the raw DataFrame through clean(), which applies three cleaning functions in sequence and returns the result as readings."}, "etl/clean.py:25": {"title": "Apply each cleaning step in order", "text": "Iterates over a tuple of functions. Functions are first-class values, so step is bound to to_celsius, then drop_invalid, then dedupe; static analysis can't see these calls, which is why codestory records them at run time."}, "etl/clean.py:26": {"title": "Replace df with the step's output", "text": "Calls the current step and rebinds df to the returned DataFrame. Each step returns a new object rather than mutating its argument, so raw is left untouched."}, "etl/clean.py:6": {"title": "Copy before modifying", "text": "df.copy() makes an independent DataFrame, so the in-place assignments below don't modify the caller's object (and avoid pandas' SettingWithCopy warning)."}, "etl/clean.py:7": {"title": "Mark the Fahrenheit rows", "text": "A vectorised comparison that produces a boolean Series aligned to df's index: True for rows whose unit is \"F\"."}, "etl/clean.py:8": {"title": "Convert those rows to Celsius", "text": "df.loc[f, \"temp\"] selects the temp column for the masked rows only, and assigns the converted values back in place. Rows already in Celsius are untouched."}, "etl/clean.py:9": {"title": "Label every row as Celsius", "text": "Broadcasts the scalar \"C\" to the whole unit column, now that all temperatures are in Celsius."}, "etl/clean.py:15": {"title": "Drop rows with missing values", "text": "dropna with subset only considers temp and station_id: a row is removed if either is NaN. 19 rows go, leaving 582."}, "etl/clean.py:16": {"title": "Keep plausible temperatures", "text": "Builds a boolean mask from two comparisons combined with & (element-wise and; the parentheses are required because & binds tighter than >=), then indexes df with it. The sensor glitches reading 999 are removed: 576 rows remain."}, "etl/clean.py:21": {"title": "Remove resent readings", "text": "drop_duplicates on station_id and timestamp keeps the first occurrence of each pair. 24 duplicates go: 576 rows become 552."}, "main.py:31": {"title": "Join station details, then summarise", "text": "Nested calls are evaluated inside-out: enrich(readings, stations) runs first, and its result is passed straight to daily_summary. Only the final summary is bound to a name."}, "etl/transform.py:7": {"title": "Left-join the station table", "text": "merge on station_id with how=\"left\" keeps every reading and adds name, region and elevation_m from the matching station. Row count is unchanged (552) because station_id is unique in stations; columns go from 4 to 7."}, "etl/transform.py:12": {"title": "Add a calendar-day column", "text": "assign returns a new DataFrame with an extra column; .dt.date extracts the date part of each timestamp, giving the grouping key for daily figures."}, "etl/transform.py:13": {"title": "Aggregate per station and day", "text": "groupby on four keys, select temp, then agg computes min, max, mean and count per group. reset_index turns the group keys back into columns: 12 stations over 2 days gives 24 rows."}, "etl/transform.py:15": {"title": "Round the daily mean", "text": "Replaces the mean column in place with values rounded to 2 decimals."}, "etl/transform.py:21": {"title": "Group daily means by region", "text": "A SeriesGroupBy over the mean column, keyed by region. Nothing is computed yet; it's evaluated by the transform calls on the next line."}, "etl/transform.py:22": {"title": "Compute each row's z-score within its region", "text": "transform(\"mean\") and transform(\"std\") broadcast each region's statistic back to every row, so the subtraction and division are row-aligned. A zero std is replaced with NaN to avoid dividing by zero."}, "etl/transform.py:23": {"title": "Keep rows far from their region", "text": "Filters to rows whose absolute z-score exceeds ANOMALY_Z (1.4). copy() returns an independent frame rather than a view of summary. 3 rows are flagged, all from Mesa Top."}, "etl/load.py:8": {"title": "Make sure the output folder exists", "text": "makedirs with exist_ok=True creates the folder if needed and does nothing if it already exists. In safe mode, codestory created it in the sandbox instead."}, "etl/load.py:10": {"title": "Write the CSV report", "text": "to_csv writes the 24-row summary; index=False leaves out pandas' row index. Safe mode redirected the file to the sandbox."}, "etl/load.py:15": {"title": "Open the stations database for writing", "text": "Same context-manager pattern as on read: the with block commits the transaction when it exits without an error."}, "etl/load.py:16": {"title": "Clear the table on a full refresh", "text": "Runs the DELETE only when --full-refresh was passed. It was, so the table is emptied before the insert; without it, rows would be appended to the existing ones."}, "etl/load.py:18": {"title": "Insert the summary rows", "text": "astype(str) converts the date objects to text (SQLite has no date type), then to_sql with if_exists=\"append\" inserts the 24 rows using executemany on the connection. Safe mode applied this to the database copy."}, "main.py:38": {"title": "Alert only when there's something to report", "text": "The condition is truthy when anomalies is non-empty and --no-alerts wasn't passed. len() is used because a DataFrame's truth value is ambiguous and would raise."}, "etl/load.py:23": {"title": "Build the alert payload", "text": "A JSON-serialisable dict: the count, and the flagged rows as a list of records via to_dict(orient=\"records\")."}, "etl/load.py:25": {"title": "Post the alert to the webhook", "text": "requests.post sends the payload as JSON with a 10-second timeout. Safe mode blocked the request and returned a fake 200, so nothing left the machine."}}, "notes": {}, "limits": {"truncated": false}, "side_effects": {"intercepted": [{"seq": 5, "kind": "file", "op": "write", "target": "output/daily_summary_2026-10-01.csv", "handled": "redirected", "count": 1}, {"seq": 7, "kind": "database", "op": "delete", "target": "sqlite:data/stations.db / daily_summary", "handled": "working-copy", "count": 1}, {"seq": 8, "kind": "database", "op": "insert", "target": "sqlite:data/stations.db / daily_summary", "handled": "working-copy", "count": 24}, {"seq": 9, "kind": "api", "op": "POST", "target": "https://hooks.example.com/weather-alerts", "handled": "blocked", "count": 1}], "real_effects": [], "not_intercepted_libraries": []}}</script>
+<script>/* codestory animation engine (MIT). Shared by player.html and walkthrough.html; `build` embeds it.
+   A small timeline: tweens of opacity, visibility, position, scale, stroke offset and plain-object values,
+   placed at absolute times. Every value is a pure function of the playhead, so seeking and scrubbing in either
+   direction always land on the same frame. */
+(function (global) {
+"use strict";
+const EASE = {
+  none: (p) => p,
+  "power1.out": (p) => 1 - (1 - p) * (1 - p),
+  "power1.inOut": (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2),
+  "power2.out": (p) => 1 - Math.pow(1 - p, 3)
+};
+const NOT_PROPS = new Set(["duration", "ease", "stagger", "onUpdate", "immediateRender"]);
+const TRANSFORMS = new Set(["x", "y", "scale"]);
+const isEl = (t) => typeof Element !== "undefined" && t instanceof Element;
+const toList = (t) => (t == null ? [] : isEl(t) || typeof t.length !== "number" ? [t] : Array.from(t));
+
+function applyProp(target, prop, v, xform) {
+  if (!isEl(target)) { target[prop] = v; return; }
+  if (TRANSFORMS.has(prop)) { let s = xform.get(target); if (!s) xform.set(target, (s = { x: 0, y: 0, scale: 1 })); s[prop] = v; s.dirty = true; return; }
+  if (prop === "autoAlpha") { target.style.opacity = v; target.style.visibility = v <= 0.001 ? "hidden" : "inherit"; return; }
+  if (prop === "opacity") { target.style.opacity = v; return; }
+  target.style[prop] = v;
+}
+function flushTransforms(xform) {
+  xform.forEach((s, el) => {
+    if (!s.dirty) return;
+    s.dirty = false;
+    el.style.transform = (s.x || s.y ? "translate(" + s.x + "px," + s.y + "px)" : "") + (s.scale !== 1 ? " scale(" + s.scale + ")" : "");
+  });
+}
+
+function makeTimeline(opts) {
+  opts = opts || {};
+  const tracks = new Map(), tweens = [], xform = new Map();
+  let total = 0, time = 0, playing = false, speed = 1, raf = 0, last = 0;
+
+  function baseValue(target, prop) {
+    if (!isEl(target)) return +target[prop] || 0;
+    if (prop === "x" || prop === "y") return 0;
+    if (prop === "scale") return 1;
+    const cs = getComputedStyle(target);
+    if (prop === "autoAlpha") return cs.visibility === "hidden" ? 0 : parseFloat(cs.opacity);
+    if (prop === "opacity") return parseFloat(cs.opacity);
+    return parseFloat(target.style[prop]) || 0;
+  }
+  function track(target, prop) {
+    let m = tracks.get(target);
+    if (!m) tracks.set(target, (m = new Map()));
+    let tr = m.get(prop);
+    if (!tr) m.set(prop, (tr = { target, prop, base: baseValue(target, prop), list: [] }));
+    return tr;
+  }
+  // value of one property at time t: the latest segment that has started wins
+  function valueAt(tr, t) {
+    let cur = null;
+    for (const seg of tr.list) { if (seg.start <= t) cur = seg; else break; }
+    if (!cur) { const first = tr.list[0]; return first && first.immediate ? first.from : tr.base; }
+    const p = cur.dur > 0 ? Math.min(1, (t - cur.start) / cur.dur) : 1;
+    return cur.from + (cur.to - cur.from) * cur.ease(p);
+  }
+  function add(targets, fromVars, toVars, at, kind) {
+    const vars = kind === "from" ? fromVars : toVars;
+    const d = vars.duration != null ? vars.duration : 0.5;
+    const ease = EASE[vars.ease] || EASE["power1.out"];
+    const immediate = kind !== "to" && vars.immediateRender !== false;
+    const t0 = at == null ? total : at;
+    const props = Object.keys(vars).filter((k) => !NOT_PROPS.has(k));
+    toList(targets).forEach((target, i) => {
+      const start = t0 + i * (vars.stagger || 0);
+      const tw = { start, dur: d, onUpdate: vars.onUpdate, lastP: undefined };
+      props.forEach((prop) => {
+        const tr = track(target, prop), now = valueAt(tr, start);
+        const seg = { start, dur: d, ease, immediate,
+          from: kind === "to" ? now : +(kind === "from" ? vars[prop] : fromVars[prop]),
+          to: kind === "from" ? now : +toVars[prop] };
+        let k = tr.list.findIndex((x) => x.start > start);
+        if (k < 0) k = tr.list.length;
+        tr.list.splice(k, 0, seg);
+      });
+      tweens.push(tw);
+      total = Math.max(total, start + d);
+    });
+    return api;
+  }
+  function render() {
+    tracks.forEach((m) => m.forEach((tr) => applyProp(tr.target, tr.prop, valueAt(tr, time), xform)));
+    flushTransforms(xform);
+    for (const tw of tweens) {
+      if (!tw.onUpdate) continue;
+      const p = tw.dur > 0 ? Math.min(1, Math.max(0, (time - tw.start) / tw.dur)) : time >= tw.start ? 1 : 0;
+      if (p !== tw.lastP) { tw.lastP = p; tw.onUpdate(); }
+    }
+    if (opts.onUpdate) opts.onUpdate();
+  }
+  function frame(now) {
+    if (!playing) return;
+    time = Math.min(total, time + Math.min(0.1, (now - last) / 1000) * speed);
+    last = now;
+    render();
+    if (time >= total) { playing = false; if (opts.onComplete) opts.onComplete(); return; }
+    raf = requestAnimationFrame(frame);
+  }
+  const api = {
+    to: (t, v, at) => add(t, null, v, at, "to"),
+    from: (t, v, at) => add(t, v, null, at, "from"),
+    fromTo: (t, f, v, at) => add(t, f, v, at, "fromTo"),
+    addLabel: () => api,
+    play() { if (time >= total) time = 0; if (!playing) { playing = true; last = performance.now(); raf = requestAnimationFrame(frame); } return api; },
+    pause() { playing = false; cancelAnimationFrame(raf); return api; },
+    paused: () => !playing,
+    isActive: () => playing,
+    time: () => time,
+    duration: () => total,
+    seek(t) { time = Math.max(0, Math.min(total, t)); render(); return api; },
+    progress(p) { return p === undefined ? (total ? time / total : 0) : api.seek(p * total); },
+    timeScale(s) { if (s === undefined) return speed; speed = s; return api; },
+    kill() { return api.pause(); }
+  };
+  return api;
+}
+const anim = {
+  timeline: makeTimeline,
+  set(targets, vars) {
+    const xform = new Map();
+    toList(targets).forEach((t) => Object.keys(vars).forEach((k) => applyProp(t, k, vars[k], xform)));
+    flushTransforms(xform);
+  }
+};
+
+global.CodestoryAnim = { anim, makeTimeline, EASE };
+})(window);
+</script>
+<script>
+(function () {
+"use strict";
+const { anim } = window.CodestoryAnim;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nf = new Intl.NumberFormat();
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const LH = 22, PAD = 10;
+
+let D = null, ALL = [], byId = {}, visible = [], expanded = new Set(), cur = -1;
+let stmtsByFile = {}, defLoc = {}, pre = [];
+let view = { file: null }, peeking = false, playing = false, tl = null, holdTimer = 0;
+
+/* ---------- Python highlighter ---------- */
+const KW = new Set("False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case".split(" "));
+const BI = new Set("abs all any bool bytes callable chr dict dir divmod enumerate filter float format frozenset getattr hasattr hash hex id int isinstance issubclass iter len list map max min next object open ord pow print range repr reversed round set setattr slice sorted str sum super tuple type vars zip self cls Exception ValueError KeyError TypeError IndexError RuntimeError StopIteration".split(" "));
+const TOK = /(#[^\n]*)|((?:\b[rRbBuUfF]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?j?\b)|(@[A-Za-z_][\w.]*)|([A-Za-z_]\w*)|(\n)|([^\S\n]+|[^\w\s])/g;
+function highlight(src) {
+  const lines = [[]];
+  let m, prevKw = null;
+  TOK.lastIndex = 0;
+  const push = (cls, text) => {
+    const parts = text.split("\n");
+    parts.forEach((p, i) => {
+      if (i > 0) lines.push([]);
+      if (p) lines[lines.length - 1].push(cls ? '<span class="' + cls + '">' + esc(p) + "</span>" : esc(p));
+    });
+  };
+  while ((m = TOK.exec(src))) {
+    if (m[1]) push("cm", m[1]);
+    else if (m[2]) push("st", m[2]);
+    else if (m[3]) push("nu", m[3]);
+    else if (m[4]) push("dc", m[4]);
+    else if (m[5]) {
+      const w = m[5];
+      if (KW.has(w)) { push("kw", w); prevKw = w; continue; }
+      if (prevKw === "def" || prevKw === "class") push("fnn", w);
+      else if (BI.has(w)) lines[lines.length - 1].push('<span class="bi id" data-n="' + w + '">' + w + "</span>");
+      else lines[lines.length - 1].push('<span class="id" data-n="' + w + '">' + w + "</span>");
+    } else if (m[6]) lines.push([]);
+    else push(null, m[7]);
+    if (!/^\s+$/.test(m[0])) prevKw = null;
+  }
+  return lines.map((l) => l.join(""));
+}
+const hlCache = {};
+function fileLines(f) { return hlCache[f] || (hlCache[f] = highlight(D.files[f] || "")); }
+
+/* ---------- loading ---------- */
+function boot() {
+  let data = null;
+  try { data = JSON.parse($("walkthrough").textContent); } catch (e) { data = null; }
+  if (data) start(data); else showDrop();
+}
+function showDrop(msg) {
+  const d = $("drop"); d.classList.add("show");
+  if (msg) $("dropErr").textContent = msg;
+  const read = (file) => file.text().then((t) => {
+    try { const j = JSON.parse(t); if (!j.steps || !j.files) throw new Error("not a walkthrough data file"); d.classList.remove("show"); start(j); }
+    catch (e) { $("dropErr").textContent = "Can't open that file: " + e.message; }
+  });
+  $("file").onchange = (e) => e.target.files[0] && read(e.target.files[0]);
+  addEventListener("dragover", (e) => { e.preventDefault(); d.classList.add("over"); });
+  addEventListener("dragleave", () => d.classList.remove("over"));
+  addEventListener("drop", (e) => { e.preventDefault(); d.classList.remove("over"); const f = e.dataTransfer.files[0]; f && read(f); });
+}
+
+/* ---------- model ---------- */
+const KIND = { assign: "Assignment", call: "Call", "return": "Return", "yield": "Yield", "if": "Decision", "for": "Loop", "while": "Loop",
+  "with": "Context manager", "import": "Import", constant: "Constants", def: "Definition", "class": "Class", "try": "Try", raise: "Raise",
+  expr: "Expression", match: "Decision", "assert": "Assertion", "delete": "Delete", pass: "Pass", "break": "Break", "continue": "Continue", scope: "Scope" };
+const KCOLOR = { assign: "--amber", call: "--blue", "return": "--green", "yield": "--green", "if": "--slate", match: "--slate", "for": "--amber", "while": "--amber",
+  import: "--blue", constant: "--violet", def: "--teal", "class": "--teal", raise: "--red" };
+const shortFn = (fid) => { const q = String(fid || "").split(":").pop(); return q.replace(/\.<locals>\./g, "."); };
+const fnLabel = (fid) => { const q = shortFn(fid); return q === "<module>" ? String(fid).split(":")[0] + " (module)" : q + "()"; };
+const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+
+function stepStmts(s) { return s.stmts || (s.stmt ? [s.stmt] : []); }
+function firstStmt(s) { const ids = stepStmts(s); return ids.length ? D.statements[ids[0]] : null; }
+
+function vsum(v, opts) {
+  if (!v || typeof v !== "object") return esc(v);
+  if (v.type === "deleted") return "deleted";
+  if (v.value === "***") return "<i>hidden</i>";
+  if (typeof v.rows === "number") return esc(v.type) + ", " + '<span class="num">' + nf.format(v.rows) + "</span> " + (v.cols != null ? "× " + v.cols + " " : "") + (v.cols != null ? "rows × cols".split(" ")[0] : "values");
+  if (v.shape) return esc(v.type) + " " + esc(v.shape.join("×"));
+  if (v.type === "str") return '"' + esc(v.value) + '"';
+  if (v.fields && v.values) {   // dataclass: show its fields
+    const parts = Object.entries(v.values).slice(0, 4).map(([k, x]) => esc(k) + "=" + (x.type === "str" ? '"' + esc(x.value) + '"' : esc("value" in x ? x.value : x.type)));
+    return esc(v.type.split(".").pop()) + "(" + parts.join(", ") + (v.fields.length > 4 ? ", …" : "") + ")";
+  }
+  if ("value" in v) return esc(v.value);
+  if (typeof v.len === "number") return esc(v.type) + " of " + nf.format(v.len);
+  if (v.status) return esc(v.type) + " " + esc(v.status);
+  return esc(v.type || "value");
+}
+function dfDesc(v) {
+  if (typeof v.rows === "number" && v.cols != null) return { n: v.rows, unit: "rows", extra: " × " + v.cols + " columns" };
+  if (typeof v.rows === "number") return { n: v.rows, unit: "values", extra: "" };
+  if (typeof v.len === "number" && v.type !== "str") return { n: v.len, unit: v.type === "dict" || v.type === "Counter" ? "keys" : "items", extra: "" };
+  return null;
+}
+
+function autoTitle(s) {
+  const st = firstStmt(s);
+  if (s.type === "enter") return s.via === "import" ? "Run " + fnLabel(s.fn).replace(" (module)", "") + " on import" : "Enter " + fnLabel(s.fn);
+  if (s.type === "return") return s.yield ? "Yield back to the caller" : "Return from " + fnLabel(s.fn);
+  if (s.type === "loop_summary") return "Loop ran " + nf.format(s.iterations) + " times";
+  if (s.type === "unfocused_call") return "Call " + fnLabel(s.fn) + ", outside the focus";
+  if (!st) return "Step";
+  if (s.type === "group") {
+    const n = s.stmts.length;
+    if (st.kind === "import") return "Import " + n + " modules or names";
+    if (st.kind === "constant") return "Define " + n + " constants";
+    if (st.kind === "def" || st.kind === "class") return "Define " + s.stmts.map((x) => (D.statements[x].writes || [])[0]).filter(Boolean).join(", ");
+    return n + " simple assignments";
+  }
+  const w = (st.writes || []).slice(0, 3).join(", ");
+  switch (st.kind) {
+    case "assign": return "Assign " + (w || (st.mutates || []).join(", ") || "a value");
+    case "constant": return "Define " + w;
+    case "import": return "Import " + w;
+    case "def": return "Define " + w + "()";
+    case "class": return "Define class " + w;
+    case "return": return "Return a value";
+    case "yield": return "Yield a value";
+    case "if": case "match": return "Check a condition";
+    case "for": return "Loop over " + ((st.reads || [])[0] || "items");
+    case "while": return "Loop while a condition holds";
+    case "with": return "Enter a context manager";
+    case "call": return "Call " + ((st.calls || [])[0] || {}).call;
+    default: return KIND[st.kind] || "Statement";
+  }
+}
+function titleOf(s) {
+  if (s.type === "statement" || s.type === "group") {
+    for (const sid of stepStmts(s)) { const e = D.explanations[sid]; if (e && e.title) return e.title; }
+  }
+  return autoTitle(s);
+}
+
+function locOf(s) {
+  if (s.type === "statement" || s.type === "group" || s.type === "loop_summary") return { file: s.file, a: s.lines[0], b: s.lines[1] };
+  if (s.type === "enter") { const d = defLoc[s.fn]; if (d) return d; }
+  if (s.type === "return" && s.to_step && byId[s.to_step]) return locOf(byId[s.to_step]);
+  if (s.from_step && byId[s.from_step]) return locOf(byId[s.from_step]);
+  for (let i = ALL.indexOf(s) - 1; i >= 0; i--) { if (ALL[i].type === "statement" || ALL[i].type === "group") return locOf(ALL[i]); }
+  const f = Object.keys(D.files)[0];
+  return { file: f, a: 1, b: 1 };
+}
+
+function precompute() {
+  ALL = D.steps; byId = {};
+  ALL.forEach((s) => (byId[s.id] = s));
+  stmtsByFile = {};
+  for (const st of Object.values(D.statements)) {
+    (stmtsByFile[st.file] = stmtsByFile[st.file] || []).push(st);
+    if (st.defines) defLoc[st.defines] = { file: st.file, a: st.line, b: st.end };
+  }
+  for (const [f, list] of Object.entries(stmtsByFile)) {
+    list.sort((x, y) => x.line - y.line);
+    const mod = list.length ? list[0].scope.split(":")[0] : null;
+    if (mod && !defLoc[mod + ":<module>"]) {
+      const top = list.find((x) => !x.parent);
+      defLoc[mod + ":<module>"] = { file: f, a: top ? top.line : 1, b: top ? top.end : 1 };
+    }
+  }
+  // call stacks and variable values, in recorded order (including hidden loop iterations)
+  const env = {}, stack = [];
+  const callOfStep = (sid) => (byId[sid] ? byId[sid].call : undefined);
+  pre = ALL.map((s) => {
+    const p = { before: {} };
+    if (s.type === "enter") {
+      stack.push(s.fn);
+      if (s.call != null) env[s.call] = Object.assign({}, s.args || {});
+    }
+    const target = s.type === "return" ? callOfStep(s.to_step) : s.call;
+    if (s.changes && target != null) {
+      const e = env[target] = env[target] || {};
+      for (const k of Object.keys(s.changes)) p.before[k] = e[k];
+      Object.assign(e, s.changes);
+    }
+    p.stack = stack.slice();
+    if (s.type === "return") stack.pop();
+    if (s.raised) p.err = true;
+    return p;
+  });
+}
+function computeVisible() { visible = []; ALL.forEach((s, i) => { if (!s.hidden_by || expanded.has(s.hidden_by)) visible.push(i); }); }
+
+/* ---------- code pane ---------- */
+function showFile(f) {
+  if (view.file === f) return false;
+  view.file = f;
+  const lines = fileLines(f);
+  $("code").innerHTML = lines.map((h, i) => '<div class="ln" data-l="' + (i + 1) + '"><span class="no">' + (i + 1) + '</span><span class="tx">' + (h || " ") + "</span></div>").join("");
+  markGoables(f);
+  [...$("tabs").children].forEach((t) => { t.classList.toggle("on", t.dataset.f === f); t.setAttribute("aria-selected", t.dataset.f === f); });
+  const on = [...$("tabs").children].find((t) => t.dataset.f === f);
+  if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+  return true;
+}
+function stmtAt(f, line) {
+  const list = stmtsByFile[f] || [];
+  let best = null;
+  for (const st of list) if (st.line <= line && line <= st.end && (!best || st.line >= best.line)) best = st;
+  return best;
+}
+function markGoables(f) {
+  $("code").querySelectorAll(".ln").forEach((ln) => {
+    const st = stmtAt(f, +ln.dataset.l);
+    if (!st || !st.names) return;
+    ln.querySelectorAll(".id").forEach((sp) => {
+      const r = st.names[sp.dataset.n];
+      if (r && r.where && /:\d+$/.test(r.where)) sp.dataset.go = r.where;
+    });
+  });
+}
+const lineTop = (n) => PAD + (n - 1) * LH;
+function targetScroll(a, b) {
+  const wrap = $("codewrap"), h = wrap.clientHeight;
+  const top = lineTop(a), bottom = lineTop(b) + LH;
+  const cur = wrap.scrollTop;
+  if (top >= cur + 30 && bottom <= cur + h - 30) return cur;
+  return Math.max(0, Math.round(top - Math.min(h * 0.33, Math.max(30, (h - (bottom - top)) / 2))));
+}
+function lineLines(cls, a, b) { for (let n = a; n <= b; n++) { const el = $("code").querySelector('.ln[data-l="' + n + '"]'); if (el) el.classList.add(cls); } }
+function badge(line, cls, text) {
+  const b = document.createElement("span");
+  b.className = "bdg " + cls; b.style.top = (lineTop(line) + 1) + "px"; b.textContent = text; b.title = text;
+  $("badges").appendChild(b);
+  placeBadges();
+  return b;
+}
+// badges stay at the right edge of the visible pane, even when long lines make the code scroll sideways
+function placeBadges() {
+  const w = $("codewrap"), right = w.scrollLeft + w.clientWidth - 14;
+  for (const b of $("badges").children) { b.style.right = "auto"; b.style.left = Math.max(60, right - b.offsetWidth) + "px"; }
+}
+
+/* ---------- side panel ---------- */
+function whereText(s, loc) {
+  const st = firstStmt(s);
+  let w = esc(loc.file) + ", line " + loc.a + (loc.b > loc.a ? "–" + loc.b : "");
+  const scope = st ? st.scope : s.fn;
+  if (scope && !/:<module>$/.test(scope)) w += ", in <code>" + esc(fnLabel(scope)) + "</code>";
+  return w;
+}
+function nameFact(n, r) {
+  const go = (w) => '<button class="go" data-go="' + esc(w) + '">' + esc(w) + "</button>";
+  switch (r.kind) {
+    case "parameter": return "parameter of this function";
+    case "local": return "local variable";
+    case "constant": return "constant" + (r.value != null ? " <b>" + esc(r.value) + "</b>" : "") + (r.where ? ", " + go(r.where) : "");
+    case "global": return "module variable" + (r.where ? ", " + go(r.where) : "");
+    case "function": return "function defined at " + go(r.where);
+    case "class": return "class defined at " + go(r.where);
+    case "import_project": return "imported from <b>" + esc(r.from) + "</b>" + (r.where && /:\d+$/.test(r.where) ? ", defined at " + go(r.where) : "");
+    case "import_package": return "from <b>" + esc(r.package || r.from) + "</b>, an installed package";
+    case "import_stdlib": return "from <b>" + esc(r.from) + "</b>, Python's standard library";
+    case "builtin": return "Python built-in";
+    default: return "unknown";
+  }
+}
+function callFact(c) {
+  switch (c.origin) {
+    case "project": return "project function" + (c.where ? ' at <button class="go" data-go="' + esc(c.where) + '">' + esc(c.where) + "</button>" : "");
+    case "package": return "<b>" + esc(c.qualified) + "</b>, from the installed package " + esc(c.package);
+    case "stdlib": return "<b>" + esc(c.qualified) + "</b>, from the standard library";
+    case "builtin": return "Python built-in";
+    case "method": return "method called on <code>" + esc(c.on) + "</code>";
+    default: return esc(c.origin);
+  }
+}
+function varRows(changes, before, opts) {
+  opts = opts || {};
+  return '<div class="vars">' + Object.entries(changes).map(([k, v]) => {
+    const b = before ? before[k] : undefined;
+    const da = dfDesc(v), db = b ? dfDesc(b) : null;
+    let val, extra = "", counter = "";
+    if (da) {
+      const from = db && db.unit === da.unit ? db.n : da.n;
+      counter = ' data-from="' + from + '" data-to="' + da.n + '"';
+      val = esc(v.type) + ', <span class="num"' + counter + ">" + nf.format(da.n) + "</span> " + da.unit + esc(da.extra);
+      if (db && db.unit === da.unit && db.n !== da.n) {
+        const d = da.n - db.n;
+        val += '<span class="d">' + (d > 0 ? "+" : "−") + nf.format(Math.abs(d)) + "</span>";
+        const w = Math.max(2, Math.round(100 * da.n / Math.max(da.n, db.n)));
+        const w0 = Math.max(2, Math.round(100 * db.n / Math.max(da.n, db.n)));
+        extra += '<div class="bar"><b data-w0="' + w0 + '" style="width:' + w + '%"></b></div>';
+      }
+    } else val = vsum(v);
+    if (v.in_place) val += ' <span class="tag">changed in place</span>';
+    if (v.sample && v.sample.rows && v.sample.rows.length && !opts.noTable) {
+      const oldCols = b && b.columns ? new Set(b.columns) : null;
+      const cols = v.sample.columns.slice(0, 7);
+      extra += '<div class="mini"><table><thead><tr>' + cols.map((c) => '<th class="' + (oldCols && !oldCols.has(c) ? "new" : "") + '">' + esc(c) + "</th>").join("") +
+        "</tr></thead><tbody>" + v.sample.rows.slice(0, 3).map((r) => "<tr>" + cols.map((c, i) => '<td class="' + (oldCols && !oldCols.has(c) ? "new" : "") + '">' + esc(r[i]) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>";
+    }
+    return '<div class="var" data-n="' + esc(k) + '"><span class="pulse"></span><span class="n">' + esc(k) + '</span><span class="v">' + val + "</span>" + extra + "</div>";
+  }).join("") + "</div>";
+}
+function renderSide(s, i) {
+  const st = firstStmt(s);
+  const loc = locOf(s);
+  const kindKey = s.type === "statement" || s.type === "group" ? (st ? st.kind : "") : s.type;
+  const label = { enter: "Call", "return": s.yield ? "Yield" : "Return", loop_summary: "Loop", unfocused_call: "Call outside the focus" }[s.type] || KIND[kindKey] || "Step";
+  const color = { enter: "--blue", "return": "--green", loop_summary: "--amber", unfocused_call: "--slate" }[s.type] || KCOLOR[kindKey] || "--slate";
+  let h = '<div class="shead" style="--k:var(' + (s.raised ? "--red" : color) + ')"><span class="kind"><i></i>' + esc(s.raised ? "Exception" : label) +
+    (s.possible ? ", possible path" : "") + (s.repeats ? ", repeated" : "") + '</span><h2 id="stitle">' + esc(titleOf(s)) + '</h2><div class="where">' + whereText(s, loc) + "</div></div>";
+  // explanation
+  let ex = null;
+  if (s.type === "statement" || s.type === "group") for (const sid of stepStmts(s)) { if (D.explanations[sid]) { ex = D.explanations[sid]; break; } }
+  if (ex && ex.text) h += '<div class="expl"><p>' + esc(ex.text) + "</p></div>";
+  else if (s.type === "statement" || s.type === "group") h += '<div class="expl"><p class="none">No written explanation for this step. The facts below are ' + (D.mode === "run" ? "measured from the run." : "read from the source.") + "</p></div>";
+  else if (s.type === "enter") {
+    const doc = D.docstrings[s.fn];
+    h += '<div class="expl"><p>' + (doc ? esc(doc) : (s.via === "import" ? "Importing a module runs its top-level code once, from the top." : s.via === "reference" ? "This function is called indirectly, through a variable that holds it." : "Execution moves into this function.")) + "</p></div>";
+  }
+  if (D.notes && D.notes[s.id]) h += '<div class="note">' + esc(D.notes[s.id]) + "</div>";
+  if (s.raised) h += '<div class="sec"><h3>Exception</h3><div class="var" data-n="!"><span class="n">raised</span><span class="v" style="color:var(--red)">' + esc(s.raised) + "</span></div></div>";
+  // values
+  if (s.type === "enter" && s.args && Object.keys(s.args).length) h += '<div class="sec"><h3>Arguments</h3>' + varRows(s.args, null) + "</div>";
+  if (s.type === "return" && s.value) h += '<div class="sec"><h3>' + (s.yield ? "Yielded value" : "Returned value") + "</h3>" + varRows({ [s.yield ? "yielded" : "returned"]: s.value }, null, { noTable: true }) + "</div>";
+  if (s.type === "statement" && s.value && !s.changes) h += '<div class="sec"><h3>' + (st && st.kind === "yield" ? "Yields" : "Returns") + "</h3>" + varRows({ value: s.value }, null, { noTable: true }) + "</div>";
+  if (s.type === "loop_summary") h += '<div class="sec"><h3>Iterations</h3><div class="big" id="iters" data-to="' + s.iterations + '">' + nf.format(s.iterations) + "</div></div>";
+  if (s.changes && Object.keys(s.changes).length) h += '<div class="sec"><h3>' + (s.type === "return" ? "Changed at the call site" : s.type === "loop_summary" ? "After the remaining iterations" : "What changed") + "</h3>" + varRows(s.changes, pre[i].before) + "</div>";
+  if (s.changes_unrecorded && Object.keys(s.changes_unrecorded).length) h += '<div class="sec"><h3>Changed by lines that ran without being recorded</h3>' + varRows(s.changes_unrecorded, null, { noTable: true }) + "</div>";
+  if (s.type === "loop_summary" && s.detailed_iterations > 1) h += '<div class="btnrow"><button class="sbtn" id="expandLoop">' + (expanded.has(s.id) ? "Hide iterations 2–" + s.detailed_iterations : "Show iterations 2–" + s.detailed_iterations) + "</button></div>";
+  if (s.type === "unfocused_call") {
+    if (s.args) h += '<div class="sec"><h3>Arguments</h3>' + varRows(s.args, null, { noTable: true }) + "</div>";
+    if (s.value) h += '<div class="sec"><h3>Returned value</h3>' + varRows({ returned: s.value }, null, { noTable: true }) + "</div>";
+  }
+  // grouped items, when there are no measured values to show instead
+  if (s.type === "group" && !(s.changes && Object.keys(s.changes).length)) {
+    h += '<div class="sec"><h3>' + esc(st.kind === "import" ? "Imports" : st.kind === "constant" ? "Constants" : "Items") + '</h3><div class="chips">' + s.stmts.map((sid) => {
+      const x = D.statements[sid];
+      const names = x.writes || [];
+      return names.map((n) => {
+        const r = (x.names || {})[n] || {};
+        const val = x.kind === "constant" ? x.value : r.kind === "import_package" ? (r.package || r.from) + ", installed" : r.kind === "import_stdlib" ? "standard library" : r.kind === "import_project" ? r.from : x.kind === "def" ? "function" : x.kind === "class" ? "class" : "";
+        return '<span class="chip"><code>' + esc(n) + "</code>" + (val ? "<small>" + esc(val) + "</small>" : "") + "</span>";
+      }).join("");
+    }).join("") + "</div></div>";
+  }
+  // facts
+  if (st && (s.type === "statement" || s.type === "group")) {
+    const rows = [];
+    if (s.branch) rows.push(["branch", s.branch.taken === "possible" ? "both sides are possible" : s.branch.taken === "body" ? "<b>condition was true</b>: the indented block ran" : s.branch.taken === "none" ? "<b>condition was false</b>: the block was skipped" : "<b>the else side ran</b>"]);
+    if (s.loop && s.loop.iterations) rows.push(["iterations", "<b>" + nf.format(s.loop.iterations) + "</b> in this call"]);
+    if (s.executions && s.executions > 1 && s.type === "statement") rows.push(["executions", "this is the " + ord(s.occurrence || 1) + " of " + nf.format(s.executions) + " times this line ran in this call"]);
+    if (s.type === "statement") {
+      for (const [n, r] of Object.entries(st.names || {}).slice(0, 10)) rows.push([n, nameFact(n, r)]);
+      for (const c of (st.calls || []).slice(0, 6)) rows.push([c.call + "()", callFact(c)]);
+    }
+    for (const io of s.io || st.io || []) {
+      const op = io.op || io.direction, tgt = io.target || "";
+      const how = io.handled === "redirected" ? ", redirected to the sandbox" : io.handled === "blocked" ? ", blocked by safe mode" : io.handled === "working-copy" ? ", on a copy of the database" : io.handled === "shadowed" ? ", captured instead of written" : "";
+      rows.push([io.kind || "I/O", esc(op) + " <b>" + esc(tgt) + "</b>" + (io.rows ? ", " + nf.format(io.rows) + " rows" : "") + esc(how)]);
+    }
+    if (st.hint) rows.push(["type", "<code>" + esc(st.hint) + "</code>"]);
+    if (st.hints) for (const [k, v] of Object.entries(st.hints)) rows.push([k, "<code>" + esc(v) + "</code>"]);
+    if (st.generator) rows.push(["generator", "the body runs lazily, one item at a time, as the caller iterates"]);
+    if (st.comments && st.comments.length) rows.push(["comment", esc(st.comments.join(" "))]);
+    if (rows.length) h += '<div class="sec"><h3>Facts <small>' + (D.mode === "run" ? "measured in this run and read from the source" : "read from the source") + '</small></h3><dl class="facts">' +
+      rows.map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + v + "</dd>").join("") + "</dl></div>";
+  }
+  $("side").innerHTML = h;
+  const ex2 = $("expandLoop");
+  if (ex2) ex2.onclick = () => { expanded.has(s.id) ? expanded.delete(s.id) : expanded.add(s.id); const keep = ALL.indexOf(s); computeVisible(); setupScrub(); go(visible.indexOf(keep), false); };
+}
+
+/* ---------- crumbs and outline ---------- */
+function renderCrumbs(i) {
+  const st = pre[i].stack;
+  $("crumbs").innerHTML = '<span class="lbl">Call stack</span>' + (st.length ? st.map((f, k) => (k ? '<span class="sep">›</span>' : "") +
+    '<span class="crumb' + (k === st.length - 1 ? " top" : "") + (pre[i].err && k === st.length - 1 ? " err" : "") + '">' + esc(fnLabel(f)) + "</span>").join("") : '<span class="crumb">' + esc(D.entry || "module") + "</span>");
+}
+function renderOutline() {
+  $("olist").innerHTML = visible.map((idx, vi) => {
+    const s = ALL[idx];
+    const ex = (s.type === "statement" || s.type === "group") && stepStmts(s).some((x) => D.explanations[x]);
+    return '<li class="' + (s.type === "enter" ? "fn" : s.type === "return" ? "ret" : "") + (ex ? " ex" : "") + '" data-vi="' + vi + '"><button style="padding-left:' + (8 + 14 * (s.depth || 0)) + 'px">' +
+      esc((s.type === "return" ? "↩ " : "") + titleOf(s)) + "</button></li>";
+  }).join("");
+}
+function syncOutline() {
+  const ol = $("olist");
+  ol.querySelectorAll("li.cur").forEach((li) => li.classList.remove("cur"));
+  const li = ol.querySelector('li[data-vi="' + cur + '"]');
+  if (li) { li.classList.add("cur"); if ($("outline").classList.contains("open")) li.scrollIntoView({ block: "nearest" }); }
+}
+
+/* ---------- rendering a step ---------- */
+function stepAt(vi) { return ALL[visible[vi]]; }
+function renderStatic(vi) {
+  const s = stepAt(vi), i = visible[vi];
+  const loc = locOf(s);
+  peeking = false; $("peekbar").hidden = true;
+  showFile(loc.file);
+  $("code").querySelectorAll(".ln.dim, .ln.maybe, .ln.raise").forEach((el) => el.classList.remove("dim", "maybe", "raise"));
+  $("badges").innerHTML = "";
+  const hl = $("hl");
+  hl.classList.toggle("err", !!s.raised);
+  hl.style.top = lineTop(loc.a) + "px";
+  hl.style.height = (loc.b - loc.a + 1) * LH + "px";
+  const st = firstStmt(s);
+  // per-type marks in the code
+  if (s.branch && st) {
+    const blocks = st.blocks || {};
+    const range = (ids) => ids && ids.length ? [D.statements[ids[0]].line, D.statements[ids[ids.length - 1]].full_end] : null;
+    const body = range(blocks.body), other = range(blocks.orelse);
+    if (s.branch.taken === "possible") {
+      if (body) lineLines("maybe", body[0], body[1]);
+      if (other) lineLines("maybe", other[0], other[1]);
+      badge(loc.a, "p", "both paths possible");
+    } else {
+      const ran = s.branch.taken === "body";
+      if (!ran && body) lineLines("dim", body[0], body[1]);
+      if (ran && other) lineLines("dim", other[0], other[1]);
+      badge(loc.a, ran ? "t" : "f", ran ? "True" : "False");
+    }
+  }
+  if (s.loop && s.loop.iterations) badge(loc.a, "loop", "runs " + nf.format(s.loop.iterations) + "×");
+  if (s.type === "loop_summary") badge(loc.a, "loop", "×" + nf.format(s.iterations));
+  if (s.raised && (s.type === "statement" || s.type === "group")) { lineLines("raise", loc.a, loc.b); badge(loc.a, "x", s.raised); }
+  if (s.possible && st) lineLines("maybe", loc.a, loc.b);
+  if (st && (s.type === "statement" || s.type === "group") && !s.branch && !s.raised && !(s.loop && s.loop.iterations)) {
+    const lib = (st.calls || []).find((c) => c.origin === "package" || c.origin === "stdlib");
+    const io = (s.io || [])[0];
+    if (io) badge(loc.a, "io", (io.op || "") + " " + (io.target || "") + (io.handled === "blocked" ? ", blocked" : io.handled ? ", sandboxed" : ""));
+    else if (lib) badge(loc.a, "lib", lib.qualified + (lib.origin === "package" ? ", " + lib.package : ", stdlib"));
+  }
+  if (s.type === "unfocused_call") badge(loc.a, "f", "calls " + fnLabel(s.fn) + ", outside the focus");
+  $("codewrap").scrollTop = targetScroll(loc.a, loc.b);
+  renderSide(s, i);
+  renderCrumbs(i);
+  $("side").scrollTop = 0;
+  $("overlay").innerHTML = "";
+  syncUI();
+}
+
+/* overlay geometry, relative to .main */
+function geo() {
+  const m = $("main").getBoundingClientRect(), w = $("codewrap").getBoundingClientRect();
+  return { m, w, top: w.top - m.top, bottom: w.bottom - m.top, left: w.left - m.left, right: w.right - m.left };
+}
+function lineAnchor(g, line, scroll, x) {
+  const y = g.top + lineTop(line) + LH / 2 - scroll;
+  return { x: x != null ? x : g.right - 36, y: Math.max(g.top + 10, Math.min(g.bottom - 10, y)) };
+}
+function elAnchor(el, side) {
+  const m = $("main").getBoundingClientRect(), r = el.getBoundingClientRect();
+  return { x: (side === "left" ? r.left : r.right) - m.left, y: r.top + Math.min(r.height, 36) / 2 - m.top };
+}
+function mk(tag, attrs) { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function token(label, cls) {
+  const g = mk("g", { class: "tok " + (cls || "") });
+  const w = Math.min(320, label.length * 7.2 + 24);
+  g.appendChild(mk("rect", { x: -w / 2, y: -12, width: w, height: 24, rx: 12 }));
+  const t = mk("text", { "text-anchor": "middle", "dominant-baseline": "central", y: 1 });
+  t.textContent = label.length > 44 ? label.slice(0, 43) + "…" : label;
+  g.appendChild(t);
+  g.style.opacity = 0;
+  $("overlay").appendChild(g);
+  return g;
+}
+function curve(a, b, bulge) {
+  if (bulge) { const bx = Math.max(a.x, b.x) + bulge; return `M${a.x},${a.y} C${bx},${a.y} ${bx},${b.y} ${b.x},${b.y}`; }
+  const mx = (a.x + b.x) / 2;
+  return `M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
+}
+function travel(t, at, pathEl, tok, dur) {
+  const len = pathEl.getTotalLength(), st = { p: 0 };
+  const place = () => { const pt = pathEl.getPointAtLength(st.p * len); tok.setAttribute("transform", "translate(" + pt.x + "," + pt.y + ")"); };
+  place();
+  t.to(tok, { opacity: 1, duration: 0.12 }, at);
+  t.to(st, { p: 1, duration: dur, ease: "power1.inOut", onUpdate: place }, at);
+  t.to(tok, { opacity: 0, duration: 0.25 }, at + dur + 0.15);
+}
+function drawPath(t, at, d, color, dashed, dur) {
+  const p = mk("path", { d, stroke: color });
+  if (dashed) p.setAttribute("stroke-dasharray", "6 7");
+  $("overlay").appendChild(p);
+  const len = p.getTotalLength();
+  if (!dashed) { p.style.strokeDasharray = len; p.style.strokeDashoffset = len; t.to(p, { strokeDashoffset: 0, duration: dur || 0.5, ease: "power2.out" }, at); }
+  else t.from(p, { opacity: 0, duration: 0.3 }, at);
+  t.to(p, { opacity: 0, duration: 0.4 }, at + (dur || 0.5) + 1.0);
+  return p;
+}
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function firstChangeLabel(changes) {
+  const [k, v] = Object.entries(changes)[0];
+  const d = dfDesc(v);
+  return k + ": " + (d ? nf.format(d.n) + " " + d.unit : (v.type === "str" ? String(v.value || "").slice(0, 24) : ("value" in v ? String(v.value) : v.type)));
+}
+
+/* ---------- arrival animation ---------- */
+function arrive(fromVi, toVi) {
+  const prev = fromVi >= 0 ? stepAt(fromVi) : null, s = stepAt(toVi);
+  const before = { file: view.file, scroll: $("codewrap").scrollTop, top: parseFloat($("hl").style.top) || PAD, h: parseFloat($("hl").style.height) || LH };
+  const g0 = geo();
+  const prevLoc = prev ? locOf(prev) : null;
+  renderStatic(toVi);
+  const after = { file: view.file, scroll: $("codewrap").scrollTop, top: parseFloat($("hl").style.top), h: parseFloat($("hl").style.height) };
+  const g = geo();
+  if (reduced) {
+    const t = anim.timeline({ onComplete: afterArrive });
+    t.from($("side"), { opacity: 0, duration: 0.25 }, 0);
+    t.seek(0); t.play(); tl = t; return;
+  }
+  const t = anim.timeline({ onComplete: afterArrive });
+  const fileChanged = before.file !== after.file;
+  // highlight glide and scroll
+  const hl = $("hl"), wrap = $("codewrap");
+  if (!fileChanged) {
+    const o = { y: before.top, h: before.h, s: before.scroll };
+    t.fromTo(o, { y: before.top, h: before.h, s: before.scroll }, { y: after.top, h: after.h, s: after.scroll, duration: 0.5, ease: "power2.out",
+      onUpdate: () => { hl.style.top = o.y + "px"; hl.style.height = o.h + "px"; wrap.scrollTop = o.s; } }, 0);
+  } else {
+    t.from($("code"), { opacity: 0, x: 26, duration: 0.45, ease: "power2.out" }, 0.1);
+    t.from(hl, { opacity: 0, duration: 0.35 }, 0.35);
+  }
+  // side panel
+  const side = $("side");
+  t.from(side.querySelector(".shead"), { opacity: 0, y: 6, duration: 0.35, ease: "power2.out" }, 0.05);
+  const secs = [...side.querySelectorAll(".expl, .note, .sec, .btnrow")];
+  t.from(secs, { opacity: 0, y: 6, duration: 0.35, stagger: 0.07, ease: "power2.out" }, 0.18);
+  // badges in the code
+  const bdgs = [...$("badges").children];
+  t.from(bdgs, { opacity: 0, scale: 0.9, duration: 0.35, stagger: 0.1 }, 0.45);
+  // dimmed or possible blocks
+  const dims = [...$("code").querySelectorAll(".ln.dim")];
+  if (dims.length) t.from(dims, { opacity: 1, duration: 0.6 }, 0.5);
+  const maybes = [...$("code").querySelectorAll(".ln.maybe")];
+  if (maybes.length) t.from(maybes, { opacity: 0.4, duration: 0.5, stagger: Math.min(0.03, 0.5 / maybes.length) }, 0.45);
+  // chips in grouped steps
+  const chips = [...side.querySelectorAll(".chip")];
+  if (chips.length) t.from(chips, { opacity: 0, x: -8, duration: 0.3, stagger: Math.min(0.08, 1.2 / chips.length) }, 0.35);
+  let at = 0.55;
+  const amber = css("--hl-edge"), green = css("--green"), red = css("--red");
+  // calls: arrow from the call site to the definition, carrying the arguments
+  if (s.type === "enter" && prevLoc && !reduced) {
+    const a = fileChanged ? lineAnchor(g0, prevLoc.a, before.scroll) : lineAnchor(g, prevLoc.a, before.scroll);
+    const loc = locOf(s);
+    const b = lineAnchor(g, loc.a, after.scroll);
+    const argtxt = s.args && Object.keys(s.args).length ? Object.entries(s.args).slice(0, 2).map(([k, v]) => { const d = dfDesc(v); return k + ": " + (d ? nf.format(d.n) + " " + d.unit : ("value" in v ? String(v.value) : v.type)); }).join(", ") : "";
+    const p = drawPath(t, 0.05, curve(a, b, 60), amber, false, 0.5);
+    travel(t, 0.3, p, token(fnLabel(s.fn).replace("()", "") + (argtxt ? "(" + argtxt + ")" : "()")), 0.9);
+    const crumb = $("crumbs").querySelector(".crumb.top");
+    if (crumb) t.from(crumb, { opacity: 0, x: -10, duration: 0.35 }, 0.8);
+    at = 1.35;
+  }
+  // returns: the value travels back to the call site
+  if (s.type === "return" && prevLoc) {
+    const a = fileChanged ? lineAnchor(g0, prevLoc.a, before.scroll) : lineAnchor(g, prevLoc.a, before.scroll);
+    const loc = locOf(s);
+    const b = lineAnchor(g, loc.a, after.scroll);
+    const p = drawPath(t, 0.05, curve(a, b, 60), green, true, 0.4);
+    const v = s.value;
+    const lbl = s.raised ? s.raised : v ? (dfDesc(v) ? nf.format(dfDesc(v).n) + " " + dfDesc(v).unit : ("value" in v ? String(v.value) : v.type)) : "None";
+    travel(t, 0.2, p, token((s.yield ? "yield " : "") + lbl, s.raised ? "err" : "ret"), 0.85);
+    at = 1.15;
+  }
+  // assignments: the new value flies from the line into the variables panel
+  const changes = s.changes || (s.type === "statement" ? null : null);
+  if (changes && Object.keys(changes).length) {
+    const k0 = Object.keys(changes)[0];
+    const row = side.querySelector('.var[data-n="' + CSS.escape(k0) + '"]');
+    if (row) {
+      const loc = locOf(s);
+      const a = lineAnchor(g, loc.a, after.scroll, Math.min(g.right - 40, g.left + 360));
+      const b = elAnchor(row, "left");
+      const p = drawPath(t, at, curve(a, b), amber, true, 0.35);
+      travel(t, at + 0.1, p, token(firstChangeLabel(changes)), 0.75);
+      at += 0.75;
+    }
+  }
+  // pulses and counters on the variables panel
+  side.querySelectorAll(".var .pulse").forEach((pl, k) => t.fromTo(pl, { opacity: 0.95, scale: 1 }, { opacity: 0, scale: 1.02, duration: 0.7, immediateRender: false }, at + 0.05 * k));
+  side.querySelectorAll(".num[data-from]").forEach((n) => {
+    const from = +n.dataset.from, to = +n.dataset.to;
+    if (from === to) return;
+    const o = { v: from };
+    t.fromTo(o, { v: from }, { v: to, duration: 0.8, ease: "power2.out", onUpdate: () => { n.textContent = nf.format(Math.round(o.v)); } }, at);
+  });
+  side.querySelectorAll(".bar b[data-w0]").forEach((b) => {
+    const w0 = +b.dataset.w0, w1 = parseFloat(b.style.width), o = { w: w0 };
+    t.fromTo(o, { w: w0 }, { w: w1, duration: 0.8, ease: "power2.out", onUpdate: () => { b.style.width = o.w + "%"; } }, at);
+  });
+  side.querySelectorAll(".mini .new").forEach((c) => t.from(c, { opacity: 0, duration: 0.5 }, at + 0.2));
+  const iters = $("iters");
+  if (iters) { const o = { v: 0 }, to = +iters.dataset.to; t.fromTo(o, { v: 1 }, { v: to, duration: 1.1, ease: "power2.out", onUpdate: () => { iters.textContent = nf.format(Math.round(o.v)); } }, 0.4); }
+  if (s.raised) t.from(hl, { opacity: 0.2, duration: 0.2 }, 0.4).from(hl, { opacity: 0.2, duration: 0.2 }, 0.65);
+  t.to({}, { duration: 0.01 }, Math.max(at + 0.9, 1.0));
+  t.seek(0);
+  t.play();
+  tl = t;
+}
+
+/* ---------- navigation ---------- */
+function stopAnim() { if (tl) { tl.seek(tl.duration()); tl.pause(); tl = null; } $("overlay").innerHTML = ""; }
+function go(vi, animate) {
+  if (!visible.length) return;
+  vi = Math.max(0, Math.min(visible.length - 1, vi));
+  clearTimeout(holdTimer);
+  const from = cur;
+  stopAnim();
+  cur = vi;
+  if (animate && from >= 0 && vi === from + 1 || animate && from < 0) arrive(from, vi);
+  else if (animate && from >= 0 && vi !== from) arrive(from, vi);
+  else { renderStatic(vi); if (playing) afterArrive(); }
+}
+function afterArrive() {
+  tl = null;
+  if (!playing) return;
+  if (cur >= visible.length - 1) { setPlaying(false); return; }
+  // hold long enough to read the explanation; steps without one move on quickly
+  const ex = $("side").querySelector(".expl p:not(.none)");
+  const words = ((ex ? ex.textContent : "") + " " + ($("stitle") || {}).textContent).split(/\s+/).filter(Boolean).length;
+  const hold = Math.min(10, 1.4 + words / 3.6) * 1000 / parseFloat($("speed").value);
+  holdTimer = setTimeout(() => go(cur + 1, true), hold);
+}
+function stepOver() {
+  const s = stepAt(cur), d = s.depth || 0;
+  const nxt = stepAt(cur + 1);
+  if (!nxt || nxt.type !== "enter") return go(cur + 1, true);
+  for (let j = cur + 1; j < visible.length; j++) {
+    const x = stepAt(j);
+    if ((x.type === "return" && (x.depth || 0) === (nxt.depth || 0) && x.fn === nxt.fn) || ((x.depth || 0) <= d && x.type !== "enter" && j > cur + 1 && x.type !== "return")) return go(j, true);
+  }
+  go(visible.length - 1, false);
+}
+function stepOut() {
+  const s = stepAt(cur), d = s.depth || 0;
+  for (let j = cur + 1; j < visible.length; j++) {
+    const x = stepAt(j);
+    if (x.type === "return" && (x.depth || 0) === d && s.type !== "return") return go(j, true);
+    if ((x.depth || 0) < d) return go(j, true);
+  }
+  go(visible.length - 1, false);
+}
+function setPlaying(on) {
+  playing = on;
+  $("playIcon").setAttribute("d", on ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4v16l13-8z");
+  $("bPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  clearTimeout(holdTimer);
+  if (on) { if (cur >= visible.length - 1) go(0, false); if (!tl) afterArrive(); }
+}
+function syncUI() {
+  $("scrub").value = cur;
+  const ex = Object.keys(D.explanations || {}).length;
+  $("count").textContent = "Step " + (cur + 1) + " of " + visible.length;
+  $("hint").textContent = cur === 0 && !playing ? "Press → for the next step, or play" : "";
+  syncOutline();
+}
+function setupScrub() { $("scrub").max = Math.max(0, visible.length - 1); renderOutline(); }
+
+/* peeking at a definition without changing the step */
+function peek(where) {
+  const m = /^(.*):(\d+)$/.exec(where);
+  if (!m || !D.files[m[1]]) return;
+  stopAnim(); clearTimeout(holdTimer); if (playing) setPlaying(false);
+  const f = m[1], line = +m[2];
+  showFile(f);
+  $("badges").innerHTML = ""; $("hl").style.top = lineTop(line) + "px"; $("hl").style.height = LH + "px";
+  $("code").querySelectorAll(".ln.dim, .ln.maybe, .ln.raise").forEach((el) => el.classList.remove("dim", "maybe", "raise"));
+  $("codewrap").scrollTop = targetScroll(line, line);
+  peeking = true;
+  $("peekmsg").innerHTML = "Showing <code>" + esc(where) + "</code>";
+  $("peekbar").hidden = false;
+  if (!reduced) { const t = anim.timeline(); t.from($("hl"), { opacity: 0, duration: 0.3 }, 0).from($("peekbar"), { opacity: 0, duration: 0.25 }, 0); t.seek(0); t.play(); }
+}
+
+/* ---------- start ---------- */
+function start(data) {
+  D = data;
+  D.explanations = D.explanations || {}; D.notes = D.notes || {}; D.docstrings = D.docstrings || {};
+  precompute(); computeVisible();
+  $("app").hidden = false;
+  $("title").textContent = D.title || "Code walkthrough";
+  $("subtitle").textContent = D.subtitle || "";
+  document.title = D.title || "Code walkthrough";
+  const r = D.run || {}, b = $("badge");
+  b.className = "badge" + (D.mode === "scan" ? " scan" : r.status === "error" ? " err" : "");
+  b.querySelector("span").textContent = D.mode === "scan" ? "Read from the source, not executed" : r.status === "error" ? "Recorded run, stopped with an error" : "Recorded run" + (r.safe_mode === false ? ", live" : ", safe mode");
+  // file tabs, in the order the walkthrough first visits them
+  const order = [];
+  for (const s of ALL) { const f = (s.file || (locOf(s) || {}).file); if (f && !order.includes(f)) order.push(f); }
+  for (const f of Object.keys(D.files)) if (!order.includes(f)) order.push(f);
+  $("tabs").innerHTML = order.map((f) => '<button class="tab" role="tab" data-f="' + esc(f) + '">' + esc(f) + "</button>").join("");
+  $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) peek(t.dataset.f + ":1"); });
+  setupScrub();
+  const kick = () => { go(0, false); if (!reduced) setTimeout(() => { if (cur === 0 && !tl) setPlaying(true); }, 1200); };
+  (document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise((res) => setTimeout(res, 1500))]) : Promise.resolve()).then(kick);
+
+  $("bNext").onclick = () => go(cur + 1, true);
+  $("bPrev").onclick = () => go(cur - 1, false);
+  $("bOver").onclick = stepOver;
+  $("bOut").onclick = stepOut;
+  $("bPlay").onclick = () => setPlaying(!playing);
+  $("scrub").oninput = (e) => { if (playing) setPlaying(false); go(+e.target.value, false); };
+  $("bOutline").onclick = () => { const o = $("outline"); const open = !o.classList.contains("open"); o.classList.toggle("open", open); o.setAttribute("aria-hidden", !open); if (open) syncOutline(); };
+  $("oClose").onclick = () => { $("outline").classList.remove("open"); $("outline").setAttribute("aria-hidden", "true"); };
+  $("olist").addEventListener("click", (e) => { const li = e.target.closest("li[data-vi]"); if (li) { if (playing) setPlaying(false); go(+li.dataset.vi, false); } });
+  $("peekBack").onclick = () => go(cur, false);
+  $("main").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-go]");
+    if (t) peek(t.dataset.go);
+  });
+  addEventListener("keydown", (e) => {
+    if (e.target.matches("input, select, textarea") && e.key !== "Escape") return;
+    if (e.key === "Escape") { $("oClose").click(); if (peeking) go(cur, false); return; }
+    if (e.key === "ArrowRight") { e.preventDefault(); if (playing) setPlaying(false); go(cur + 1, true); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); if (playing) setPlaying(false); go(cur - 1, false); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); if (playing) setPlaying(false); stepOver(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (playing) setPlaying(false); stepOut(); }
+    else if (e.key === " " && !e.target.matches("button")) { e.preventDefault(); setPlaying(!playing); }
+    else if (e.key === "Home") { go(0, false); }
+    else if (e.key === "End") { if (playing) setPlaying(false); go(visible.length - 1, false); }
+    else if (e.key === "o" || e.key === "O") $("bOutline").click();
+  });
+  $("codewrap").addEventListener("scroll", placeBadges, { passive: true });
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (!peeking) { stopAnim(); renderStatic(cur); } }, 150); });
+}
+
+window.codestoryWalkthrough = { go: (i, a) => go(i, a), get step() { return cur; }, get count() { return visible.length; }, get playing() { return playing; },
+  pause: () => setPlaying(false), finish: () => stopAnim(), get timeline() { return tl; } };
+boot();
+})();
+</script>
+</body>
+</html>

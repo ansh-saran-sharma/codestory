@@ -1,0 +1,173 @@
+{
+ "schema": "codestory.walkthrough/1",
+ "title": "Daily weather pipeline, line by line",
+ "subtitle": "One run on 1 October 2026 with --full-refresh: readings in, a cleaned daily summary, a report, a table and an alert out.",
+ "entry": "main.py --date 2026-10-01 --full-refresh",
+ "explanations": {
+  "main.py:2": {
+   "title": "Import the tools and the settings",
+   "text": "argparse, logging and datetime.date come from the standard library. The last import pulls INPUT_CSV and STATIONS_DB from config: the first import of a module executes it from the top, so the walkthrough steps into config.py before these names are bound."
+  },
+  "config.py:4": {
+   "title": "Define the pipeline's constants",
+   "text": "Module-level constants: input and output locations, and the thresholds used later. MIN_TEMP_C and MAX_TEMP_C bound physically plausible readings; ANOMALY_Z is the z-score cut-off for flagging a station."
+  },
+  "config.py:10": {
+   "title": "Read the webhook URL from the environment",
+   "text": "os.getenv returns the ALERT_WEBHOOK environment variable if it is set, otherwise the default URL. The variable wasn't set in this run, so the default was used."
+  },
+  "config.py:11": {
+   "title": "Read the API token from the environment",
+   "text": "Same pattern as the webhook. The default is a hard-coded token, which is a security smell: a real secret should never be committed as a fallback. codestory masks its value."
+  },
+  "main.py:7": {
+   "title": "Import the extract functions",
+   "text": "Importing etl.extract runs that module: it imports sqlite3 and pandas and defines read_readings and load_stations, which this line then binds here."
+  },
+  "etl/clean.py:4": {
+   "title": "Define the cleaning steps",
+   "text": "Four plain functions that each take a DataFrame and return a new one, so they can be chained. clean() composes the other three."
+  },
+  "main.py:12": {
+   "title": "Configure logging",
+   "text": "basicConfig installs a root handler that prints just the message text at INFO level and above. It only has an effect the first time it's called in a process."
+  },
+  "main.py:45": {
+   "title": "Run main() only when executed as a script",
+   "text": "__name__ is \"__main__\" when the file is run directly (or through runpy, as codestory does), and the module's name when it's imported. This guard keeps imports side-effect free."
+  },
+  "main.py:25": {
+   "title": "Parse the command line",
+   "text": "parse_args() builds the parser and returns an argparse.Namespace; args.date and args.full_refresh are read later to name the report and decide whether to clear the table."
+  },
+  "main.py:21": {
+   "title": "Return the parsed options",
+   "text": "parse_args() with no argument reads sys.argv[1:]. codestory set sys.argv to this run's arguments, so the Namespace holds date=2026-10-01 and full_refresh=True."
+  },
+  "main.py:26": {
+   "title": "Load the raw readings",
+   "text": "Calls read_readings with the CSV path from config and binds the resulting DataFrame to raw."
+  },
+  "etl/extract.py:7": {
+   "title": "Read the CSV into a DataFrame",
+   "text": "pd.read_csv parses the file into a DataFrame; parse_dates converts the timestamp column to datetime64 so the .dt accessor works later. 601 rows, 4 columns: station_id, timestamp, temp, unit."
+  },
+  "main.py:27": {
+   "title": "Load the station metadata",
+   "text": "Calls load_stations with the SQLite path and binds the 12-row station table to stations."
+  },
+  "etl/extract.py:13": {
+   "title": "Open the stations database",
+   "text": "sqlite3.connect opens the file; as a context manager the connection commits (or rolls back on error) when the block exits. Note that it does not close the connection. In safe mode, codestory pointed this at a copy of the database."
+  },
+  "etl/extract.py:14": {
+   "title": "Query the stations table",
+   "text": "pd.read_sql_query runs the SELECT on the open connection and returns the result as a DataFrame: 12 stations with name, region and elevation."
+  },
+  "main.py:30": {
+   "title": "Clean the readings",
+   "text": "Passes the raw DataFrame through clean(), which applies three cleaning functions in sequence and returns the result as readings."
+  },
+  "etl/clean.py:25": {
+   "title": "Apply each cleaning step in order",
+   "text": "Iterates over a tuple of functions. Functions are first-class values, so step is bound to to_celsius, then drop_invalid, then dedupe; static analysis can't see these calls, which is why codestory records them at run time."
+  },
+  "etl/clean.py:26": {
+   "title": "Replace df with the step's output",
+   "text": "Calls the current step and rebinds df to the returned DataFrame. Each step returns a new object rather than mutating its argument, so raw is left untouched."
+  },
+  "etl/clean.py:6": {
+   "title": "Copy before modifying",
+   "text": "df.copy() makes an independent DataFrame, so the in-place assignments below don't modify the caller's object (and avoid pandas' SettingWithCopy warning)."
+  },
+  "etl/clean.py:7": {
+   "title": "Mark the Fahrenheit rows",
+   "text": "A vectorised comparison that produces a boolean Series aligned to df's index: True for rows whose unit is \"F\"."
+  },
+  "etl/clean.py:8": {
+   "title": "Convert those rows to Celsius",
+   "text": "df.loc[f, \"temp\"] selects the temp column for the masked rows only, and assigns the converted values back in place. Rows already in Celsius are untouched."
+  },
+  "etl/clean.py:9": {
+   "title": "Label every row as Celsius",
+   "text": "Broadcasts the scalar \"C\" to the whole unit column, now that all temperatures are in Celsius."
+  },
+  "etl/clean.py:15": {
+   "title": "Drop rows with missing values",
+   "text": "dropna with subset only considers temp and station_id: a row is removed if either is NaN. 19 rows go, leaving 582."
+  },
+  "etl/clean.py:16": {
+   "title": "Keep plausible temperatures",
+   "text": "Builds a boolean mask from two comparisons combined with & (element-wise and; the parentheses are required because & binds tighter than >=), then indexes df with it. The sensor glitches reading 999 are removed: 576 rows remain."
+  },
+  "etl/clean.py:21": {
+   "title": "Remove resent readings",
+   "text": "drop_duplicates on station_id and timestamp keeps the first occurrence of each pair. 24 duplicates go: 576 rows become 552."
+  },
+  "main.py:31": {
+   "title": "Join station details, then summarise",
+   "text": "Nested calls are evaluated inside-out: enrich(readings, stations) runs first, and its result is passed straight to daily_summary. Only the final summary is bound to a name."
+  },
+  "etl/transform.py:7": {
+   "title": "Left-join the station table",
+   "text": "merge on station_id with how=\"left\" keeps every reading and adds name, region and elevation_m from the matching station. Row count is unchanged (552) because station_id is unique in stations; columns go from 4 to 7."
+  },
+  "etl/transform.py:12": {
+   "title": "Add a calendar-day column",
+   "text": "assign returns a new DataFrame with an extra column; .dt.date extracts the date part of each timestamp, giving the grouping key for daily figures."
+  },
+  "etl/transform.py:13": {
+   "title": "Aggregate per station and day",
+   "text": "groupby on four keys, select temp, then agg computes min, max, mean and count per group. reset_index turns the group keys back into columns: 12 stations over 2 days gives 24 rows."
+  },
+  "etl/transform.py:15": {
+   "title": "Round the daily mean",
+   "text": "Replaces the mean column in place with values rounded to 2 decimals."
+  },
+  "etl/transform.py:21": {
+   "title": "Group daily means by region",
+   "text": "A SeriesGroupBy over the mean column, keyed by region. Nothing is computed yet; it's evaluated by the transform calls on the next line."
+  },
+  "etl/transform.py:22": {
+   "title": "Compute each row's z-score within its region",
+   "text": "transform(\"mean\") and transform(\"std\") broadcast each region's statistic back to every row, so the subtraction and division are row-aligned. A zero std is replaced with NaN to avoid dividing by zero."
+  },
+  "etl/transform.py:23": {
+   "title": "Keep rows far from their region",
+   "text": "Filters to rows whose absolute z-score exceeds ANOMALY_Z (1.4). copy() returns an independent frame rather than a view of summary. 3 rows are flagged, all from Mesa Top."
+  },
+  "etl/load.py:8": {
+   "title": "Make sure the output folder exists",
+   "text": "makedirs with exist_ok=True creates the folder if needed and does nothing if it already exists. In safe mode, codestory created it in the sandbox instead."
+  },
+  "etl/load.py:10": {
+   "title": "Write the CSV report",
+   "text": "to_csv writes the 24-row summary; index=False leaves out pandas' row index. Safe mode redirected the file to the sandbox."
+  },
+  "etl/load.py:15": {
+   "title": "Open the stations database for writing",
+   "text": "Same context-manager pattern as on read: the with block commits the transaction when it exits without an error."
+  },
+  "etl/load.py:16": {
+   "title": "Clear the table on a full refresh",
+   "text": "Runs the DELETE only when --full-refresh was passed. It was, so the table is emptied before the insert; without it, rows would be appended to the existing ones."
+  },
+  "etl/load.py:18": {
+   "title": "Insert the summary rows",
+   "text": "astype(str) converts the date objects to text (SQLite has no date type), then to_sql with if_exists=\"append\" inserts the 24 rows using executemany on the connection. Safe mode applied this to the database copy."
+  },
+  "main.py:38": {
+   "title": "Alert only when there's something to report",
+   "text": "The condition is truthy when anomalies is non-empty and --no-alerts wasn't passed. len() is used because a DataFrame's truth value is ambiguous and would raise."
+  },
+  "etl/load.py:23": {
+   "title": "Build the alert payload",
+   "text": "A JSON-serialisable dict: the count, and the flagged rows as a list of records via to_dict(orient=\"records\")."
+  },
+  "etl/load.py:25": {
+   "title": "Post the alert to the webhook",
+   "text": "requests.post sends the payload as JSON with a 10-second timeout. Safe mode blocked the request and returned a fake 200, so nothing left the machine."
+  }
+ },
+ "notes": {}
+}

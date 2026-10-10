@@ -1,38 +1,47 @@
 # codestory
 
-Turns a Python program into an animated story of how it works: what it imports, the settings it reads,
-the data it loads, every transformation, the decisions it makes, and what it writes. The result is one
-HTML file that plays like a video, steps like a slideshow, and opens in any browser, offline.
+Turns a Python program into an animation of how it works. The result is one HTML file that opens in any
+browser, offline, and can be shared like a document.
 
-It works in two modes:
+It has two **views**:
 
-- **`scan`** explains the code: every path it can take, without running anything. Use it to walk a colleague
-  or stakeholder through a codebase.
-- **`run`** shows what actually happened in one real run: which branches were taken and how many rows were
-  read, filtered, transformed and written. Use it when the data or the outcome changes from day to day.
+- **Story** (default): the story of the data, for anyone. What the program imports, the settings it reads, the
+  data it loads, every transformation, the decisions it makes and what it writes, scene by scene.
+- **Walkthrough**: the code, line by line, for programmers. A debugger-style replay: every statement explained,
+  where every name comes from, and the values before and after each line.
 
-![A codestory scene: 601 rows flow into drop_invalid() and 576 come out](docs/demo.gif)
+And two **modes**:
+
+- **`scan`** reads the code without running it, and shows every path it can take. Use it to explain a codebase.
+- **`run`** records one real run, in a safe mode that keeps side effects in a sandbox, and shows what actually
+  happened: which branches ran and how much data was read, filtered, transformed and written. Use it when the
+  data or the outcome changes from day to day.
+
+![Story view: 601 rows flow into drop_invalid() and 576 come out](docs/demo.gif)
+
+![Walkthrough view: stepping into drop_invalid(), dropna removes 19 rows, and 576 rows return to the caller](docs/walkthrough-demo.gif)
 
 ## Watch a demo
 
-Two finished stories, playable in your browser:
+Finished examples, playable in your browser:
 
-- **[Daily weather pipeline](https://ansh-saran-sharma.github.io/codestory/examples/weather-pipeline/story.html)**,
-  a `run`: 601 sensor readings are cleaned, summarized per station, saved to a report and a database, and
-  trigger an alert, all held in safe mode.
-- **[Nightly web error check](https://ansh-saran-sharma.github.io/codestory/examples/log-check-scan/story.html)**,
-  a `scan`: every path through a log checker that emails on-call when too many requests fail, without
-  running it.
+| Program | Story | Walkthrough |
+|---|---|---|
+| **Daily weather pipeline**: 601 sensor readings are cleaned, summarized per station, saved to a report and a database, and trigger an alert, all held in safe mode | [Story of a run](https://ansh-saran-sharma.github.io/codestory/examples/weather-pipeline/story.html) | [Line by line, a run](https://ansh-saran-sharma.github.io/codestory/examples/weather-pipeline/walkthrough.html) |
+| **Nightly web error check**: counts failed requests per endpoint and emails on-call when too many fail | [Story of every path](https://ansh-saran-sharma.github.io/codestory/examples/log-check-scan/story.html) | [Line by line, every path](https://ansh-saran-sharma.github.io/codestory/examples/log-check-scan/walkthrough.html) |
+| **Nightly stock check**: works out which of 40 products need reordering and groups the orders by supplier | | [Line by line, a run](https://ansh-saran-sharma.github.io/codestory/examples/stock-check/walkthrough.html) |
 
-Press space to play or pause, use the arrow keys to move between scenes, and click any card to see its code
-and data. The source projects, bundles and storyboards are in [`examples/`](examples/).
+In a story, press space to play or pause and the arrow keys to move between scenes; click any card to see its
+code and data. In a walkthrough, → and ← step forward and back, ↓ steps over a call and ↑ steps out of one; click
+any underlined name to see its definition. The source projects, bundles and documents are in
+[`examples/`](examples/).
 
 ## Contents
 
 1. Install
 2. Use it from your AI assistant
 3. Use it from the command line
-4. scan or run?
+4. Story or walkthrough? scan or run?
 5. Safe mode
 6. What the bundle contains
 7. Troubleshooting
@@ -65,14 +74,16 @@ You invoke codestory with a chat message, and the assistant runs `codestory.py` 
 same everywhere (in OpenAI Codex, write `$codestory`):
 
 ```
-/codestory [scan | run] <entry> [options] [-- program arguments]
+/codestory [scan | run] <entry> [--view story | walkthrough] [options] [-- program arguments]
 ```
 
 ```
-/codestory scan main.py --audience stakeholders        explain the code, nothing is executed
-/codestory run main.py -- --date 2026-10-01            show what one real run did, in safe mode
-/codestory run -m etl.cli --live -- --full-refresh     a module, with real side effects
-/codestory codestory_bundle.json --out today.html      make a story from a bundle you already have
+/codestory scan main.py --audience stakeholders                    explain the code, nothing is executed
+/codestory run main.py -- --date 2026-10-01                        show what one real run did, in safe mode
+/codestory run -m etl.cli --live -- --full-refresh                 a module, with real side effects
+/codestory codestory_bundle.json --out today.html                  make a story from a bundle you already have
+/codestory run main.py --view walkthrough -- --date 2026-10-01     replay that run line by line
+/codestory scan main.py --view walkthrough --focus clean           walk through one function's code
 ```
 
 Only `<entry>` is required (a script, `-m module`, or a bundle file), so `/codestory main.py` is a complete
@@ -82,16 +93,19 @@ request. Everything in `[brackets]` is optional and has a default:
 |---|---|---|
 | `<entry>` | **Required** | — |
 | `scan` / `run` | Optional | Chosen from your wording; `scan` if unclear |
-| `--audience TEXT` | Optional | A mixed audience |
-| `--out FILE` | Optional | `story.html` |
+| `--view story` / `--view walkthrough` | Optional | `story`, unless you ask for line-by-line detail |
+| `--focus TARGET` (walkthrough only) | Optional | The whole program |
+| `--max-steps N` (walkthrough only) | Optional | 150 statements get written explanations |
+| `--audience TEXT` | Optional | A mixed audience (story); programmers (walkthrough) |
+| `--out FILE` | Optional | `story.html` or `walkthrough.html` |
 | `--root DIR` | Optional | The current folder, or the entry's folder |
 | `--budget N` | Optional | 240,000 characters of source code |
 | `--live` (`run` only) | Optional | Off: safe mode sandboxes side effects |
 | `--allow-subprocess` (`run` only) | Optional | Off: your program can't start other programs |
 | `-- ...` (`run` only) | Only if your program needs arguments | Your program runs with no arguments |
 
-Plain words work just as well: "Explain how main.py works for our product manager" or "Show me what main.py
-did with --date 2026-10-01".
+Plain words work just as well: "Explain how main.py works for our product manager", "Show me what main.py
+did with --date 2026-10-01", or "Step through clean() line by line".
 
 Where you type the options depends on the assistant:
 
@@ -106,6 +120,7 @@ Where you type the options depends on the assistant:
   ```
   /codestory codestory_bundle.json --audience stakeholders    # in the chat, with the bundle uploaded
   ```
+  For a walkthrough, add `--view walkthrough` to the terminal command: it's chosen when recording.
 
 ## 3. Use it from the command line
 
@@ -115,15 +130,17 @@ The same three steps the assistant performs:
 # 1. Record (pick one; everything after the script name is optional). Run with your project's Python environment active.
 python codestory.py scan main.py                        # explain the code: nothing is executed
 python codestory.py run  main.py -- --date 2026-10-01   # one real run; arguments for your program go after --
+#    add --view walkthrough to either, for a line-by-line walkthrough
 
-# 2. Give codestory_bundle.json to your assistant, which writes storyboard.json
+# 2. Give codestory_bundle.json to your assistant, which writes storyboard.json (or walkthrough.json)
 
 # 3. Build one shareable HTML file
 python codestory.py build storyboard.json -o story.html
+python codestory.py build walkthrough.json --bundle codestory_bundle.json -o walkthrough.html
 ```
 
-Required: for `scan` and `run`, the script or `-m MODULE` (one of the two); for `build`, the storyboard file.
-Everything else is optional:
+Required: for `scan` and `run`, the script or `-m MODULE` (one of the two); for `build`, the document, plus
+`--bundle` for a walkthrough. Everything else is optional:
 
 | Command | Argument or option | Required? | Default if left out | What it does |
 |---|---|---|---|---|
@@ -131,18 +148,34 @@ Everything else is optional:
 | `scan`, `run` | `-o FILE` | Optional | `codestory_bundle.json` | Bundle file name |
 | `scan`, `run` | `--root DIR` | Optional | The current folder, or the entry's folder | Project root |
 | `scan`, `run` | `--budget N` | Optional | 240,000 | Maximum characters of source code in the bundle |
+| `scan`, `run` | `--view story\|walkthrough` | Optional | `story` | `walkthrough` adds the statement map and step plan, and for `run` records line by line |
+| `scan`, `run` | `--focus TARGET` | Optional | The whole program | Walkthrough only: files or functions to cover, comma-separated |
+| `scan`, `run` | `--max-steps N` | Optional | 150 | Walkthrough only: how many statements are suggested for written explanations |
 | `run` | `--live` | Optional | Off (safe mode on) | Writes, posts and emails really happen |
 | `run` | `--allow-subprocess` | Optional | Off | Let the program start other programs in safe mode |
 | `run` | `-- ARGS` | Only if your program needs them | No arguments | Arguments for your program |
-| `build` | `storyboard.json` | **Required** | — | The storyboard to play |
-| `build` | `-o FILE` | Optional | `story.html` | Story file name |
-| `build` | `--force` | Optional | Off | Build even if the storyboard has problems (not recommended) |
+| `build` | `storyboard.json` or `walkthrough.json` | **Required** | — | The document to play |
+| `build` | `--bundle FILE` | **Required for a walkthrough** | — | The bundle the walkthrough was written from |
+| `build` | `-o FILE` | Optional | `story.html`, or `walkthrough.html` | Output file name |
+| `build` | `--force` | Optional | Off | Build even if the document has problems (not recommended) |
 
 Watching a story: space plays and pauses; the left and right arrows move between scenes; Home and End jump to
 the start and end. Click any card to see its code, columns and sample rows. Click a station on the line at
 the top to jump to that scene.
 
-## 4. scan or run?
+Watching a walkthrough: space plays and pauses; → and ← step forward and back; ↓ steps over a call and ↑ steps
+out of the current function; O opens the outline. Click an underlined name to see where it's defined, then
+"Back to the current step".
+
+## 4. Story or walkthrough? scan or run?
+
+| | Story view | Walkthrough view |
+|---|---|---|
+| For | anyone: colleagues, managers, new team members | programmers |
+| Follows | the data, scene by scene | the code, statement by statement |
+| Shows | what each step does to the data, in plain language, with the code on every card | every statement explained, where each name comes from, values before and after each line, calls and returns |
+| Length | about 8–16 scenes | one step per statement that runs (long loops collapse after the first iteration); `--focus` narrows it |
+| Recording cost in `run` | close to a normal run | 2–10 times a normal run, because every line is recorded |
 
 | | `scan` | `run` |
 |---|---|---|
@@ -196,22 +229,29 @@ Check the bundle before uploading it to a chat assistant if your data is sensiti
 | The assistant doesn't use the skill | Check the folder location and that `SKILL.md` sits directly inside `codestory/`. Mention it by name (`/codestory`, or `$codestory` in Codex). |
 | Copilot can't run the command | Switch Copilot Chat to Agent mode and allow terminal commands. |
 | The story file shows "Open a storyboard" | It's the empty player. Build with `codestory.py build`, or drop `storyboard.json` onto it. |
-| `build` reports storyboard problems | Paste the messages back to the assistant and ask it to fix the storyboard. |
+| `build` reports storyboard or walkthrough problems | Paste the messages back to the assistant and ask it to fix the document. For a walkthrough, "no such statement in the bundle" usually means the code changed after recording: record again. |
+| "this bundle has no walkthrough" | The bundle was recorded without `--view walkthrough`. Record again with it. |
+| A walkthrough `run` is slow | Line-by-line recording costs time in tight Python loops. Use `--focus` to record only the part you need. |
+| The walkthrough file shows "Open a walkthrough" | It's the empty player. Build with `codestory.py build walkthrough.json --bundle codestory_bundle.json`. |
 | Fonts look plain | Stories load the Overpass font from Google Fonts when online and use system fonts offline. The story still works. |
 | A side effect really happened | Look for "REAL side effect" lines in the `run` output and `real_effects` in the bundle. If safe mode should have caught it, please report the library involved. |
 
 ## 8. Files
 
 - `USAGE.md`: how to invoke codestory in each assistant, with examples for every mode and option.
-- `SKILL.md`: instructions that teach the assistant to write a good storyboard from a bundle.
-- `references/bundle-format.md`, `references/example-storyboard.json`: read by the assistant when needed.
+- `SKILL.md`: instructions that teach the assistant to write a good storyboard or walkthrough from a bundle.
+- `references/bundle-format.md`, `references/example-storyboard.json`, `references/walkthrough-guide.md`: read by
+  the assistant when needed.
 - `codestory.py`: scan, run, build. Python 3.8+, standard library only.
-- `player.html`: the player, with its own small animation engine. One file, no third-party code, works in
-  any modern browser.
-- `storyboard.schema.json`: the contract between the assistant and the player.
-- `examples/weather-pipeline/`: a `run` of a pandas + SQLite pipeline, with its bundle, storyboard and story.
-- `examples/log-check-scan/`: a `scan` of a stdlib-only log checker, with its bundle, storyboard and story.
-- `docs/demo.gif`: the animation at the top of this page.
+- `player.html`: the story player. `walkthrough.html`: the walkthrough player. Both are single files with no
+  third-party code. The walkthrough's design is in [docs/walkthrough-spec.md](docs/walkthrough-spec.md).
+- `engine.js`: codestory's own animation engine, shared by both players; `build` embeds it in every story.
+- `storyboard.schema.json`, `walkthrough.schema.json`: the formats the assistant writes for each view.
+- `examples/weather-pipeline/`: a `run` of a pandas + SQLite pipeline, as a story and a walkthrough.
+- `examples/log-check-scan/`: a `scan` of a stdlib-only log checker, as a story and a walkthrough.
+- `examples/stock-check/`: a `run` of a stdlib-only stock-reorder job, as a walkthrough.
+- `tests/`: the test suite (`python -m unittest discover tests`).
+- `docs/demo.gif`, `docs/walkthrough-demo.gif`: the animations at the top of this page.
 
 ## 9. Contributing
 
@@ -221,6 +261,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately, as d
 
 ## 10. License
 
-[MIT](LICENSE). The whole project, including the player, is original code under this license. Stories
+[MIT](LICENSE). The whole project, including both players and the animation engine, is original code under this
+license. Stories
 request the [Overpass](https://fonts.google.com/specimen/Overpass) fonts from Google Fonts when viewed online;
 the fonts are not included in this repository.

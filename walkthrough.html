@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Code walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #E7ECEF; --panel: #FBFCFD; --panel-2: #F1F4F6; --ink: #17212B; --muted: #5D6A78; --rule: #C5CFD8;
+  --blue: #2F64D6; --violet: #8A3FB3; --teal: #0E8A8A; --green: #23924A; --amber: #C97700; --red: #D23C34; --slate: #56657A;
+  --hl: rgba(201,119,0,.14); --hl-edge: #C97700; --token-ink: #FFFFFF;
+  --k-kw: #2F64D6; --k-str: #23924A; --k-num: #B4471F; --k-com: #7A8794; --k-fn: #9A5B00; --k-bi: #8A3FB3; --k-dec: #0E8A8A;
+  --sans: "Overpass", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Overpass Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --lh: 22px;
+  box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground: #0F151B; --panel: #172029; --panel-2: #1D2833; --ink: #E3E9EF; --muted: #8F9CAA; --rule: #2B3845;
+  --blue: #6F98F2; --violet: #B57CD9; --teal: #3CC2C0; --green: #4CC777; --amber: #F2A73B; --red: #F06A5F; --slate: #8796AA;
+  --hl: rgba(242,167,59,.15); --hl-edge: #F2A73B; --token-ink: #0F151B;
+  --k-kw: #7FA5F5; --k-str: #6FD08F; --k-num: #F08A6B; --k-com: #7E8C9A; --k-fn: #F2B95B; --k-bi: #C79BE6; --k-dec: #4FCFCB; } }
+:root[data-theme="dark"] {
+  --ground: #0F151B; --panel: #172029; --panel-2: #1D2833; --ink: #E3E9EF; --muted: #8F9CAA; --rule: #2B3845;
+  --blue: #6F98F2; --violet: #B57CD9; --teal: #3CC2C0; --green: #4CC777; --amber: #F2A73B; --red: #F06A5F; --slate: #8796AA;
+  --hl: rgba(242,167,59,.15); --hl-edge: #F2A73B; --token-ink: #0F151B;
+  --k-kw: #7FA5F5; --k-str: #6FD08F; --k-num: #F08A6B; --k-com: #7E8C9A; --k-fn: #F2B95B; --k-bi: #C79BE6; --k-dec: #4FCFCB; }
+*, *::before, *::after { box-sizing: inherit; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+code { font-family: var(--mono); font-size: .92em; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
+  max-width: 1480px; margin: 0 auto; padding: 0 18px; }
+.app > * { min-width: 0; }
+.mast { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 0 8px; }
+.mast h1 { margin: 0; font-size: clamp(19px, 2.2vw, 25px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+.mast p { margin: 3px 0 0; color: var(--muted); font-size: 14.5px; max-width: 80ch; }
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--rule);
+  background: var(--panel); font-size: 13.5px; white-space: nowrap; }
+.badge i { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.badge.err i { background: var(--red); }
+.badge.scan i { background: transparent; border: 2px solid var(--muted); }
+
+/* call stack */
+.crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; padding: 2px 0 8px; font-size: 13.5px; min-height: 32px; scrollbar-width: thin; }
+.crumb { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; background: var(--panel); border: 1.5px solid var(--rule);
+  font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.crumb.top { border-color: var(--hl-edge); }
+.crumb.err { border-color: var(--red); color: var(--red); }
+.crumbs .sep { color: var(--muted); }
+.crumbs .lbl { color: var(--muted); margin-right: 4px; font-family: var(--sans); }
+
+/* main */
+.main { position: relative; display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(330px, 1fr); gap: 14px; min-height: 0; }
+.codepanel, .side { background: var(--panel); border: 1.5px solid var(--rule); border-radius: 12px; min-height: 0; }
+.codepanel { display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
+.tabs { display: flex; gap: 2px; padding: 6px 6px 0; overflow-x: auto; border-bottom: 1.5px solid var(--rule); scrollbar-width: thin; }
+.tab { border: 0; background: transparent; padding: 7px 12px 6px; border-radius: 8px 8px 0 0; font-family: var(--mono); font-size: 12.5px;
+  color: var(--muted); cursor: pointer; white-space: nowrap; border-bottom: 2.5px solid transparent; }
+.tab.on { color: var(--ink); background: var(--panel-2); border-bottom-color: var(--hl-edge); }
+.tab:hover { color: var(--ink); }
+.peekbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; font-size: 13.5px;
+  background: color-mix(in srgb, var(--blue) 12%, var(--panel)); border-bottom: 1.5px solid var(--rule); }
+.peekbar[hidden] { display: none; }
+.peekbar button { border: 1.5px solid var(--rule); background: var(--panel); border-radius: 999px; padding: 3px 12px; cursor: pointer; font-size: 13px; }
+.codewrap { position: relative; overflow: auto; min-height: 0; scrollbar-width: thin; }
+.content { position: relative; padding: 10px 0 40vh; min-width: max-content; }
+.code { position: relative; z-index: 1; font-family: var(--mono); font-size: 13px; line-height: var(--lh); }
+.ln { display: flex; height: var(--lh); white-space: pre; padding-right: 220px; position: relative; transition: none; }
+.ln .no { flex: none; width: 3.6em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+.ln .tx { flex: none; }
+.ln.dim { opacity: .38; }
+.ln.maybe::before { content: ""; position: absolute; left: 3.1em; top: 0; bottom: 0; width: 2px; border-left: 2px dashed var(--muted); }
+.ln.raise .tx { text-decoration: underline wavy var(--red); text-underline-offset: 4px; }
+.hl { position: absolute; left: 0; right: 0; top: 10px; height: var(--lh); background: var(--hl); box-shadow: inset 4px 0 0 var(--hl-edge); z-index: 0; pointer-events: none; }
+.hl.err { background: color-mix(in srgb, var(--red) 16%, transparent); box-shadow: inset 4px 0 0 var(--red); }
+.badges { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.bdg { position: absolute; height: 20px; line-height: 20px; padding: 0 9px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+  background: var(--panel); border: 1.5px solid var(--rule); color: var(--ink); max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+.bdg.t { border-color: var(--green); color: var(--green); font-weight: 600; }
+.bdg.f { border-color: var(--slate); color: var(--slate); font-weight: 600; }
+.bdg.p { border-style: dashed; color: var(--muted); }
+.bdg.x { border-color: var(--red); color: var(--red); font-weight: 600; }
+.bdg.lib { border-color: var(--violet); color: var(--violet); }
+.bdg.io { border-color: var(--teal); color: var(--teal); }
+.bdg.loop { border-color: var(--amber); color: var(--amber); font-weight: 600; }
+/* syntax */
+.kw { color: var(--k-kw); } .st { color: var(--k-str); } .nu { color: var(--k-num); } .cm { color: var(--k-com); font-style: italic; }
+.fnn { color: var(--k-fn); font-weight: 600; } .bi { color: var(--k-bi); } .dc { color: var(--k-dec); }
+.id[data-go] { cursor: pointer; text-decoration: underline dotted color-mix(in srgb, var(--muted) 60%, transparent); text-underline-offset: 3px; }
+.id[data-go]:hover { text-decoration-color: var(--ink); }
+
+/* side panel */
+.side { overflow: auto; padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: thin; }
+.shead .kind { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--k); }
+.shead .kind i { width: 16px; height: 5px; border-radius: 3px; background: var(--k); }
+.shead h2 { margin: 4px 0 2px; font-size: 21px; line-height: 1.2; font-weight: 800; letter-spacing: -0.01em; }
+.shead .where { color: var(--muted); font-size: 13.5px; }
+.expl p { margin: 0; font-size: 15.5px; line-height: 1.55; max-width: 62ch; }
+.expl .none { color: var(--muted); font-size: 13.5px; }
+.note { border-left: 3px solid var(--blue); padding-left: 10px; font-size: 14px; }
+.sec h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.sec h3 small { font-weight: 400; }
+.vars { display: grid; gap: 6px; }
+.var { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: baseline; padding: 8px 10px;
+  background: var(--panel-2); border-radius: 8px; }
+.var .n { font-family: var(--mono); font-weight: 600; font-size: 13.5px; }
+.var .v { font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.var .v .num { font-weight: 700; }
+.var .d { font-weight: 600; font-size: 12.5px; margin-left: 6px; color: var(--amber); }
+.var .tag { font-size: 12px; color: var(--muted); }
+.var .pulse { position: absolute; inset: -2px; border-radius: 10px; border: 2px solid var(--hl-edge); opacity: 0; pointer-events: none; }
+.var .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.var .bar b { display: block; height: 100%; background: var(--hl-edge); }
+.mini { grid-column: 1 / -1; overflow-x: auto; }
+.mini table { border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+.mini th, .mini td { padding: 2px 10px 2px 0; text-align: left; white-space: nowrap; max-width: 14em; overflow: hidden; text-overflow: ellipsis; }
+.mini th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--rule); }
+.mini .new { color: var(--hl-edge); }
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; font-size: 13.5px; }
+.facts dt { font-family: var(--mono); font-size: 12.5px; padding-top: 1px; }
+.facts dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.facts dd b { color: var(--ink); font-weight: 600; }
+.facts .go { color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; background: none; border: 0; padding: 0; font: inherit; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; gap: 7px; align-items: baseline; padding: 4px 10px; border-radius: 7px; background: var(--panel-2); font-size: 13px; }
+.chip code { font-weight: 600; }
+.chip small { color: var(--muted); }
+.big { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.sbtn { border: 1.5px solid var(--rule); background: var(--panel); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13.5px; }
+.sbtn:hover { border-color: var(--ink); }
+.measured { font-size: 12.5px; color: var(--muted); }
+
+/* overlay */
+svg.overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 5; }
+svg.overlay path { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+.tok rect { fill: var(--hl-edge); }
+.tok.ret rect { fill: var(--green); }
+.tok.err rect { fill: var(--red); }
+.tok text { fill: var(--token-ink); font-family: var(--sans); font-weight: 800; font-size: 12.5px; }
+
+/* controls */
+.controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 0 14px; }
+.btns { display: flex; gap: 6px; align-items: center; }
+.btn { height: 40px; min-width: 40px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--rule); background: var(--panel); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; }
+.btn:hover { border-color: var(--ink); }
+.btn svg { width: 17px; height: 17px; }
+.btn.play { background: var(--ink); border-color: var(--ink); color: var(--ground); width: 46px; height: 46px; padding: 0; }
+.prog { display: grid; gap: 3px; }
+.prog input { width: 100%; accent-color: var(--ink); margin: 0; }
+.prog .lbl { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta select { background: var(--panel); border: 1.5px solid var(--rule); border-radius: 8px; padding: 6px 8px; font-size: 13.5px; }
+
+/* outline drawer */
+.outline { position: fixed; top: 0; left: 0; bottom: 0; width: min(380px, 92vw); background: var(--panel); border-right: 1.5px solid var(--rule);
+  transform: translateX(-105%); transition: transform .25s ease; z-index: 20; display: flex; flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 0 calc(env(safe-area-inset-bottom, 0px) + 10px); }
+.outline.open { transform: none; box-shadow: 20px 0 40px rgba(0,0,0,.12); }
+.outline header { display: flex; justify-content: space-between; align-items: center; padding: 0 14px 10px; }
+.outline h2 { margin: 0; font-size: 17px; }
+.outline ol { list-style: none; margin: 0; padding: 0 8px 20px; overflow: auto; font-size: 13.5px; }
+.outline li button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outline li button:hover { background: var(--panel-2); }
+.outline li.fn button { font-weight: 700; }
+.outline li.ret button { color: var(--muted); }
+.outline li.cur button { background: var(--hl); box-shadow: inset 3px 0 0 var(--hl-edge); }
+.outline li.ex button::after { content: " ✎"; color: var(--muted); font-weight: 400; }
+
+/* empty state */
+.drop { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; }
+.drop.show { display: grid; }
+.drop .box { max-width: 520px; border: 2px dashed var(--rule); border-radius: 16px; padding: 32px; background: var(--panel); text-align: center; }
+.drop.over .box { border-color: var(--blue); }
+.drop h2 { margin: 0 0 8px; font-size: 22px; }
+.drop p { color: var(--muted); margin: 0 0 18px; }
+.drop label { display: inline-block; padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--ground); font-weight: 600; cursor: pointer; }
+.drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.drop .err { color: var(--red); margin-top: 14px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  body { height: auto; }
+  .app { height: auto; padding: 0 10px; grid-template-rows: auto auto auto auto; }
+  .mast { flex-direction: column; align-items: flex-start; }
+  .main { grid-template-columns: 1fr; }
+  .codepanel { height: 46vh; }
+  .side { max-height: none; overflow: visible; }
+  .controls { position: sticky; bottom: 0; background: var(--ground); grid-template-columns: 1fr; gap: 8px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
+  .btns { justify-content: center; flex-wrap: wrap; }
+  .btn .t { display: none; }
+  .ln { padding-right: 140px; }
+}
+@media (prefers-reduced-motion: reduce) { .outline { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <header class="mast">
+    <div><h1 id="title"></h1><p id="subtitle"></p></div>
+    <span class="badge" id="badge"><i></i><span></span></span>
+  </header>
+  <nav class="crumbs" id="crumbs" aria-label="Call stack"></nav>
+  <main class="main" id="main">
+    <section class="codepanel" aria-label="Source code">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="peekbar" id="peekbar" hidden><span id="peekmsg"></span><button id="peekBack">Back to the current step</button></div>
+      <div class="codewrap" id="codewrap">
+        <div class="content" id="content">
+          <div class="hl" id="hl"></div>
+          <div class="code" id="code"></div>
+          <div class="badges" id="badges"></div>
+        </div>
+      </div>
+    </section>
+    <aside class="side" id="side" aria-live="polite"></aside>
+    <svg class="overlay" id="overlay" aria-hidden="true"></svg>
+  </main>
+  <footer class="controls">
+    <div class="btns">
+      <button class="btn" id="bOutline" aria-label="Outline" title="Outline (O)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <button class="btn" id="bPrev" title="Previous step (←)"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Back</span></button>
+      <button class="btn play" id="bPlay" aria-label="Play" title="Play or pause (space)"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4v16l13-8z" fill="currentColor"/></svg></button>
+      <button class="btn" id="bNext" title="Next step (→)"><span class="t">Next</span><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn" id="bOver" title="Step over: skip the inside of a call (↓)"><svg viewBox="0 0 24 24"><path d="M4 15c2-6 14-6 16 0M16 15h4v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Step over</span></button>
+      <button class="btn" id="bOut" title="Step out: finish this function (↑)"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t">Step out</span></button>
+    </div>
+    <div class="prog">
+      <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Step">
+      <div class="lbl"><span id="count"></span><span id="hint"></span></div>
+    </div>
+    <div class="meta"><label class="sr" for="speed">Autoplay speed</label>
+      <select id="speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+    </div>
+  </footer>
+</div>
+
+<aside class="outline" id="outline" aria-hidden="true" aria-label="Outline">
+  <header><h2>Outline</h2><button class="btn" id="oClose" aria-label="Close outline"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></header>
+  <ol id="olist"></ol>
+</aside>
+
+<div class="drop" id="drop">
+  <div class="box">
+    <h2>Open a walkthrough</h2>
+    <p>Build one with <code>python codestory.py build walkthrough.json --bundle codestory_bundle.json</code>, or drop the built data file here.</p>
+    <label>Choose file<input type="file" id="file" accept=".json,application/json"></label>
+    <div class="err" id="dropErr"></div>
+  </div>
+</div>
+
+<script id="walkthrough" type="application/json">null</script>
+<script src="engine.js"></script>
+<script>
+(function () {
+"use strict";
+const { anim } = window.CodestoryAnim;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nf = new Intl.NumberFormat();
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const LH = 22, PAD = 10;
+
+let D = null, ALL = [], byId = {}, visible = [], expanded = new Set(), cur = -1;
+let stmtsByFile = {}, defLoc = {}, pre = [];
+let view = { file: null }, peeking = false, playing = false, tl = null, holdTimer = 0;
+
+/* ---------- Python highlighter ---------- */
+const KW = new Set("False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case".split(" "));
+const BI = new Set("abs all any bool bytes callable chr dict dir divmod enumerate filter float format frozenset getattr hasattr hash hex id int isinstance issubclass iter len list map max min next object open ord pow print range repr reversed round set setattr slice sorted str sum super tuple type vars zip self cls Exception ValueError KeyError TypeError IndexError RuntimeError StopIteration".split(" "));
+const TOK = /(#[^\n]*)|((?:\b[rRbBuUfF]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?j?\b)|(@[A-Za-z_][\w.]*)|([A-Za-z_]\w*)|(\n)|([^\S\n]+|[^\w\s])/g;
+function highlight(src) {
+  const lines = [[]];
+  let m, prevKw = null;
+  TOK.lastIndex = 0;
+  const push = (cls, text) => {
+    const parts = text.split("\n");
+    parts.forEach((p, i) => {
+      if (i > 0) lines.push([]);
+      if (p) lines[lines.length - 1].push(cls ? '<span class="' + cls + '">' + esc(p) + "</span>" : esc(p));
+    });
+  };
+  while ((m = TOK.exec(src))) {
+    if (m[1]) push("cm", m[1]);
+    else if (m[2]) push("st", m[2]);
+    else if (m[3]) push("nu", m[3]);
+    else if (m[4]) push("dc", m[4]);
+    else if (m[5]) {
+      const w = m[5];
+      if (KW.has(w)) { push("kw", w); prevKw = w; continue; }
+      if (prevKw === "def" || prevKw === "class") push("fnn", w);
+      else if (BI.has(w)) lines[lines.length - 1].push('<span class="bi id" data-n="' + w + '">' + w + "</span>");
+      else lines[lines.length - 1].push('<span class="id" data-n="' + w + '">' + w + "</span>");
+    } else if (m[6]) lines.push([]);
+    else push(null, m[7]);
+    if (!/^\s+$/.test(m[0])) prevKw = null;
+  }
+  return lines.map((l) => l.join(""));
+}
+const hlCache = {};
+function fileLines(f) { return hlCache[f] || (hlCache[f] = highlight(D.files[f] || "")); }
+
+/* ---------- loading ---------- */
+function boot() {
+  let data = null;
+  try { data = JSON.parse($("walkthrough").textContent); } catch (e) { data = null; }
+  if (data) start(data); else showDrop();
+}
+function showDrop(msg) {
+  const d = $("drop"); d.classList.add("show");
+  if (msg) $("dropErr").textContent = msg;
+  const read = (file) => file.text().then((t) => {
+    try { const j = JSON.parse(t); if (!j.steps || !j.files) throw new Error("not a walkthrough data file"); d.classList.remove("show"); start(j); }
+    catch (e) { $("dropErr").textContent = "Can't open that file: " + e.message; }
+  });
+  $("file").onchange = (e) => e.target.files[0] && read(e.target.files[0]);
+  addEventListener("dragover", (e) => { e.preventDefault(); d.classList.add("over"); });
+  addEventListener("dragleave", () => d.classList.remove("over"));
+  addEventListener("drop", (e) => { e.preventDefault(); d.classList.remove("over"); const f = e.dataTransfer.files[0]; f && read(f); });
+}
+
+/* ---------- model ---------- */
+const KIND = { assign: "Assignment", call: "Call", "return": "Return", "yield": "Yield", "if": "Decision", "for": "Loop", "while": "Loop",
+  "with": "Context manager", "import": "Import", constant: "Constants", def: "Definition", "class": "Class", "try": "Try", raise: "Raise",
+  expr: "Expression", match: "Decision", "assert": "Assertion", "delete": "Delete", pass: "Pass", "break": "Break", "continue": "Continue", scope: "Scope" };
+const KCOLOR = { assign: "--amber", call: "--blue", "return": "--green", "yield": "--green", "if": "--slate", match: "--slate", "for": "--amber", "while": "--amber",
+  import: "--blue", constant: "--violet", def: "--teal", "class": "--teal", raise: "--red" };
+const shortFn = (fid) => { const q = String(fid || "").split(":").pop(); return q.replace(/\.<locals>\./g, "."); };
+const fnLabel = (fid) => { const q = shortFn(fid); return q === "<module>" ? String(fid).split(":")[0] + " (module)" : q + "()"; };
+const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+
+function stepStmts(s) { return s.stmts || (s.stmt ? [s.stmt] : []); }
+function firstStmt(s) { const ids = stepStmts(s); return ids.length ? D.statements[ids[0]] : null; }
+
+function vsum(v, opts) {
+  if (!v || typeof v !== "object") return esc(v);
+  if (v.type === "deleted") return "deleted";
+  if (v.value === "***") return "<i>hidden</i>";
+  if (typeof v.rows === "number") return esc(v.type) + ", " + '<span class="num">' + nf.format(v.rows) + "</span> " + (v.cols != null ? "× " + v.cols + " " : "") + (v.cols != null ? "rows × cols".split(" ")[0] : "values");
+  if (v.shape) return esc(v.type) + " " + esc(v.shape.join("×"));
+  if (v.type === "str") return '"' + esc(v.value) + '"';
+  if (v.fields && v.values) {   // dataclass: show its fields
+    const parts = Object.entries(v.values).slice(0, 4).map(([k, x]) => esc(k) + "=" + (x.type === "str" ? '"' + esc(x.value) + '"' : esc("value" in x ? x.value : x.type)));
+    return esc(v.type.split(".").pop()) + "(" + parts.join(", ") + (v.fields.length > 4 ? ", …" : "") + ")";
+  }
+  if ("value" in v) return esc(v.value);
+  if (typeof v.len === "number") return esc(v.type) + " of " + nf.format(v.len);
+  if (v.status) return esc(v.type) + " " + esc(v.status);
+  return esc(v.type || "value");
+}
+function dfDesc(v) {
+  if (typeof v.rows === "number" && v.cols != null) return { n: v.rows, unit: "rows", extra: " × " + v.cols + " columns" };
+  if (typeof v.rows === "number") return { n: v.rows, unit: "values", extra: "" };
+  if (typeof v.len === "number" && v.type !== "str") return { n: v.len, unit: v.type === "dict" || v.type === "Counter" ? "keys" : "items", extra: "" };
+  return null;
+}
+
+function autoTitle(s) {
+  const st = firstStmt(s);
+  if (s.type === "enter") return s.via === "import" ? "Run " + fnLabel(s.fn).replace(" (module)", "") + " on import" : "Enter " + fnLabel(s.fn);
+  if (s.type === "return") return s.yield ? "Yield back to the caller" : "Return from " + fnLabel(s.fn);
+  if (s.type === "loop_summary") return "Loop ran " + nf.format(s.iterations) + " times";
+  if (s.type === "unfocused_call") return "Call " + fnLabel(s.fn) + ", outside the focus";
+  if (!st) return "Step";
+  if (s.type === "group") {
+    const n = s.stmts.length;
+    if (st.kind === "import") return "Import " + n + " modules or names";
+    if (st.kind === "constant") return "Define " + n + " constants";
+    if (st.kind === "def" || st.kind === "class") return "Define " + s.stmts.map((x) => (D.statements[x].writes || [])[0]).filter(Boolean).join(", ");
+    return n + " simple assignments";
+  }
+  const w = (st.writes || []).slice(0, 3).join(", ");
+  switch (st.kind) {
+    case "assign": return "Assign " + (w || (st.mutates || []).join(", ") || "a value");
+    case "constant": return "Define " + w;
+    case "import": return "Import " + w;
+    case "def": return "Define " + w + "()";
+    case "class": return "Define class " + w;
+    case "return": return "Return a value";
+    case "yield": return "Yield a value";
+    case "if": case "match": return "Check a condition";
+    case "for": return "Loop over " + ((st.reads || [])[0] || "items");
+    case "while": return "Loop while a condition holds";
+    case "with": return "Enter a context manager";
+    case "call": return "Call " + ((st.calls || [])[0] || {}).call;
+    default: return KIND[st.kind] || "Statement";
+  }
+}
+function titleOf(s) {
+  if (s.type === "statement" || s.type === "group") {
+    for (const sid of stepStmts(s)) { const e = D.explanations[sid]; if (e && e.title) return e.title; }
+  }
+  return autoTitle(s);
+}
+
+function locOf(s) {
+  if (s.type === "statement" || s.type === "group" || s.type === "loop_summary") return { file: s.file, a: s.lines[0], b: s.lines[1] };
+  if (s.type === "enter") { const d = defLoc[s.fn]; if (d) return d; }
+  if (s.type === "return" && s.to_step && byId[s.to_step]) return locOf(byId[s.to_step]);
+  if (s.from_step && byId[s.from_step]) return locOf(byId[s.from_step]);
+  for (let i = ALL.indexOf(s) - 1; i >= 0; i--) { if (ALL[i].type === "statement" || ALL[i].type === "group") return locOf(ALL[i]); }
+  const f = Object.keys(D.files)[0];
+  return { file: f, a: 1, b: 1 };
+}
+
+function precompute() {
+  ALL = D.steps; byId = {};
+  ALL.forEach((s) => (byId[s.id] = s));
+  stmtsByFile = {};
+  for (const st of Object.values(D.statements)) {
+    (stmtsByFile[st.file] = stmtsByFile[st.file] || []).push(st);
+    if (st.defines) defLoc[st.defines] = { file: st.file, a: st.line, b: st.end };
+  }
+  for (const [f, list] of Object.entries(stmtsByFile)) {
+    list.sort((x, y) => x.line - y.line);
+    const mod = list.length ? list[0].scope.split(":")[0] : null;
+    if (mod && !defLoc[mod + ":<module>"]) {
+      const top = list.find((x) => !x.parent);
+      defLoc[mod + ":<module>"] = { file: f, a: top ? top.line : 1, b: top ? top.end : 1 };
+    }
+  }
+  // call stacks and variable values, in recorded order (including hidden loop iterations)
+  const env = {}, stack = [];
+  const callOfStep = (sid) => (byId[sid] ? byId[sid].call : undefined);
+  pre = ALL.map((s) => {
+    const p = { before: {} };
+    if (s.type === "enter") {
+      stack.push(s.fn);
+      if (s.call != null) env[s.call] = Object.assign({}, s.args || {});
+    }
+    const target = s.type === "return" ? callOfStep(s.to_step) : s.call;
+    if (s.changes && target != null) {
+      const e = env[target] = env[target] || {};
+      for (const k of Object.keys(s.changes)) p.before[k] = e[k];
+      Object.assign(e, s.changes);
+    }
+    p.stack = stack.slice();
+    if (s.type === "return") stack.pop();
+    if (s.raised) p.err = true;
+    return p;
+  });
+}
+function computeVisible() { visible = []; ALL.forEach((s, i) => { if (!s.hidden_by || expanded.has(s.hidden_by)) visible.push(i); }); }
+
+/* ---------- code pane ---------- */
+function showFile(f) {
+  if (view.file === f) return false;
+  view.file = f;
+  const lines = fileLines(f);
+  $("code").innerHTML = lines.map((h, i) => '<div class="ln" data-l="' + (i + 1) + '"><span class="no">' + (i + 1) + '</span><span class="tx">' + (h || " ") + "</span></div>").join("");
+  markGoables(f);
+  [...$("tabs").children].forEach((t) => { t.classList.toggle("on", t.dataset.f === f); t.setAttribute("aria-selected", t.dataset.f === f); });
+  const on = [...$("tabs").children].find((t) => t.dataset.f === f);
+  if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+  return true;
+}
+function stmtAt(f, line) {
+  const list = stmtsByFile[f] || [];
+  let best = null;
+  for (const st of list) if (st.line <= line && line <= st.end && (!best || st.line >= best.line)) best = st;
+  return best;
+}
+function markGoables(f) {
+  $("code").querySelectorAll(".ln").forEach((ln) => {
+    const st = stmtAt(f, +ln.dataset.l);
+    if (!st || !st.names) return;
+    ln.querySelectorAll(".id").forEach((sp) => {
+      const r = st.names[sp.dataset.n];
+      if (r && r.where && /:\d+$/.test(r.where)) sp.dataset.go = r.where;
+    });
+  });
+}
+const lineTop = (n) => PAD + (n - 1) * LH;
+function targetScroll(a, b) {
+  const wrap = $("codewrap"), h = wrap.clientHeight;
+  const top = lineTop(a), bottom = lineTop(b) + LH;
+  const cur = wrap.scrollTop;
+  if (top >= cur + 30 && bottom <= cur + h - 30) return cur;
+  return Math.max(0, Math.round(top - Math.min(h * 0.33, Math.max(30, (h - (bottom - top)) / 2))));
+}
+function lineLines(cls, a, b) { for (let n = a; n <= b; n++) { const el = $("code").querySelector('.ln[data-l="' + n + '"]'); if (el) el.classList.add(cls); } }
+function badge(line, cls, text) {
+  const b = document.createElement("span");
+  b.className = "bdg " + cls; b.style.top = (lineTop(line) + 1) + "px"; b.textContent = text; b.title = text;
+  $("badges").appendChild(b);
+  placeBadges();
+  return b;
+}
+// badges stay at the right edge of the visible pane, even when long lines make the code scroll sideways
+function placeBadges() {
+  const w = $("codewrap"), right = w.scrollLeft + w.clientWidth - 14;
+  for (const b of $("badges").children) { b.style.right = "auto"; b.style.left = Math.max(60, right - b.offsetWidth) + "px"; }
+}
+
+/* ---------- side panel ---------- */
+function whereText(s, loc) {
+  const st = firstStmt(s);
+  let w = esc(loc.file) + ", line " + loc.a + (loc.b > loc.a ? "–" + loc.b : "");
+  const scope = st ? st.scope : s.fn;
+  if (scope && !/:<module>$/.test(scope)) w += ", in <code>" + esc(fnLabel(scope)) + "</code>";
+  return w;
+}
+function nameFact(n, r) {
+  const go = (w) => '<button class="go" data-go="' + esc(w) + '">' + esc(w) + "</button>";
+  switch (r.kind) {
+    case "parameter": return "parameter of this function";
+    case "local": return "local variable";
+    case "constant": return "constant" + (r.value != null ? " <b>" + esc(r.value) + "</b>" : "") + (r.where ? ", " + go(r.where) : "");
+    case "global": return "module variable" + (r.where ? ", " + go(r.where) : "");
+    case "function": return "function defined at " + go(r.where);
+    case "class": return "class defined at " + go(r.where);
+    case "import_project": return "imported from <b>" + esc(r.from) + "</b>" + (r.where && /:\d+$/.test(r.where) ? ", defined at " + go(r.where) : "");
+    case "import_package": return "from <b>" + esc(r.package || r.from) + "</b>, an installed package";
+    case "import_stdlib": return "from <b>" + esc(r.from) + "</b>, Python's standard library";
+    case "builtin": return "Python built-in";
+    default: return "unknown";
+  }
+}
+function callFact(c) {
+  switch (c.origin) {
+    case "project": return "project function" + (c.where ? ' at <button class="go" data-go="' + esc(c.where) + '">' + esc(c.where) + "</button>" : "");
+    case "package": return "<b>" + esc(c.qualified) + "</b>, from the installed package " + esc(c.package);
+    case "stdlib": return "<b>" + esc(c.qualified) + "</b>, from the standard library";
+    case "builtin": return "Python built-in";
+    case "method": return "method called on <code>" + esc(c.on) + "</code>";
+    default: return esc(c.origin);
+  }
+}
+function varRows(changes, before, opts) {
+  opts = opts || {};
+  return '<div class="vars">' + Object.entries(changes).map(([k, v]) => {
+    const b = before ? before[k] : undefined;
+    const da = dfDesc(v), db = b ? dfDesc(b) : null;
+    let val, extra = "", counter = "";
+    if (da) {
+      const from = db && db.unit === da.unit ? db.n : da.n;
+      counter = ' data-from="' + from + '" data-to="' + da.n + '"';
+      val = esc(v.type) + ', <span class="num"' + counter + ">" + nf.format(da.n) + "</span> " + da.unit + esc(da.extra);
+      if (db && db.unit === da.unit && db.n !== da.n) {
+        const d = da.n - db.n;
+        val += '<span class="d">' + (d > 0 ? "+" : "−") + nf.format(Math.abs(d)) + "</span>";
+        const w = Math.max(2, Math.round(100 * da.n / Math.max(da.n, db.n)));
+        const w0 = Math.max(2, Math.round(100 * db.n / Math.max(da.n, db.n)));
+        extra += '<div class="bar"><b data-w0="' + w0 + '" style="width:' + w + '%"></b></div>';
+      }
+    } else val = vsum(v);
+    if (v.in_place) val += ' <span class="tag">changed in place</span>';
+    if (v.sample && v.sample.rows && v.sample.rows.length && !opts.noTable) {
+      const oldCols = b && b.columns ? new Set(b.columns) : null;
+      const cols = v.sample.columns.slice(0, 7);
+      extra += '<div class="mini"><table><thead><tr>' + cols.map((c) => '<th class="' + (oldCols && !oldCols.has(c) ? "new" : "") + '">' + esc(c) + "</th>").join("") +
+        "</tr></thead><tbody>" + v.sample.rows.slice(0, 3).map((r) => "<tr>" + cols.map((c, i) => '<td class="' + (oldCols && !oldCols.has(c) ? "new" : "") + '">' + esc(r[i]) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>";
+    }
+    return '<div class="var" data-n="' + esc(k) + '"><span class="pulse"></span><span class="n">' + esc(k) + '</span><span class="v">' + val + "</span>" + extra + "</div>";
+  }).join("") + "</div>";
+}
+function renderSide(s, i) {
+  const st = firstStmt(s);
+  const loc = locOf(s);
+  const kindKey = s.type === "statement" || s.type === "group" ? (st ? st.kind : "") : s.type;
+  const label = { enter: "Call", "return": s.yield ? "Yield" : "Return", loop_summary: "Loop", unfocused_call: "Call outside the focus" }[s.type] || KIND[kindKey] || "Step";
+  const color = { enter: "--blue", "return": "--green", loop_summary: "--amber", unfocused_call: "--slate" }[s.type] || KCOLOR[kindKey] || "--slate";
+  let h = '<div class="shead" style="--k:var(' + (s.raised ? "--red" : color) + ')"><span class="kind"><i></i>' + esc(s.raised ? "Exception" : label) +
+    (s.possible ? ", possible path" : "") + (s.repeats ? ", repeated" : "") + '</span><h2 id="stitle">' + esc(titleOf(s)) + '</h2><div class="where">' + whereText(s, loc) + "</div></div>";
+  // explanation
+  let ex = null;
+  if (s.type === "statement" || s.type === "group") for (const sid of stepStmts(s)) { if (D.explanations[sid]) { ex = D.explanations[sid]; break; } }
+  if (ex && ex.text) h += '<div class="expl"><p>' + esc(ex.text) + "</p></div>";
+  else if (s.type === "statement" || s.type === "group") h += '<div class="expl"><p class="none">No written explanation for this step. The facts below are ' + (D.mode === "run" ? "measured from the run." : "read from the source.") + "</p></div>";
+  else if (s.type === "enter") {
+    const doc = D.docstrings[s.fn];
+    h += '<div class="expl"><p>' + (doc ? esc(doc) : (s.via === "import" ? "Importing a module runs its top-level code once, from the top." : s.via === "reference" ? "This function is called indirectly, through a variable that holds it." : "Execution moves into this function.")) + "</p></div>";
+  }
+  if (D.notes && D.notes[s.id]) h += '<div class="note">' + esc(D.notes[s.id]) + "</div>";
+  if (s.raised) h += '<div class="sec"><h3>Exception</h3><div class="var" data-n="!"><span class="n">raised</span><span class="v" style="color:var(--red)">' + esc(s.raised) + "</span></div></div>";
+  // values
+  if (s.type === "enter" && s.args && Object.keys(s.args).length) h += '<div class="sec"><h3>Arguments</h3>' + varRows(s.args, null) + "</div>";
+  if (s.type === "return" && s.value) h += '<div class="sec"><h3>' + (s.yield ? "Yielded value" : "Returned value") + "</h3>" + varRows({ [s.yield ? "yielded" : "returned"]: s.value }, null, { noTable: true }) + "</div>";
+  if (s.type === "statement" && s.value && !s.changes) h += '<div class="sec"><h3>' + (st && st.kind === "yield" ? "Yields" : "Returns") + "</h3>" + varRows({ value: s.value }, null, { noTable: true }) + "</div>";
+  if (s.type === "loop_summary") h += '<div class="sec"><h3>Iterations</h3><div class="big" id="iters" data-to="' + s.iterations + '">' + nf.format(s.iterations) + "</div></div>";
+  if (s.changes && Object.keys(s.changes).length) h += '<div class="sec"><h3>' + (s.type === "return" ? "Changed at the call site" : s.type === "loop_summary" ? "After the remaining iterations" : "What changed") + "</h3>" + varRows(s.changes, pre[i].before) + "</div>";
+  if (s.changes_unrecorded && Object.keys(s.changes_unrecorded).length) h += '<div class="sec"><h3>Changed by lines that ran without being recorded</h3>' + varRows(s.changes_unrecorded, null, { noTable: true }) + "</div>";
+  if (s.type === "loop_summary" && s.detailed_iterations > 1) h += '<div class="btnrow"><button class="sbtn" id="expandLoop">' + (expanded.has(s.id) ? "Hide iterations 2–" + s.detailed_iterations : "Show iterations 2–" + s.detailed_iterations) + "</button></div>";
+  if (s.type === "unfocused_call") {
+    if (s.args) h += '<div class="sec"><h3>Arguments</h3>' + varRows(s.args, null, { noTable: true }) + "</div>";
+    if (s.value) h += '<div class="sec"><h3>Returned value</h3>' + varRows({ returned: s.value }, null, { noTable: true }) + "</div>";
+  }
+  // grouped items, when there are no measured values to show instead
+  if (s.type === "group" && !(s.changes && Object.keys(s.changes).length)) {
+    h += '<div class="sec"><h3>' + esc(st.kind === "import" ? "Imports" : st.kind === "constant" ? "Constants" : "Items") + '</h3><div class="chips">' + s.stmts.map((sid) => {
+      const x = D.statements[sid];
+      const names = x.writes || [];
+      return names.map((n) => {
+        const r = (x.names || {})[n] || {};
+        const val = x.kind === "constant" ? x.value : r.kind === "import_package" ? (r.package || r.from) + ", installed" : r.kind === "import_stdlib" ? "standard library" : r.kind === "import_project" ? r.from : x.kind === "def" ? "function" : x.kind === "class" ? "class" : "";
+        return '<span class="chip"><code>' + esc(n) + "</code>" + (val ? "<small>" + esc(val) + "</small>" : "") + "</span>";
+      }).join("");
+    }).join("") + "</div></div>";
+  }
+  // facts
+  if (st && (s.type === "statement" || s.type === "group")) {
+    const rows = [];
+    if (s.branch) rows.push(["branch", s.branch.taken === "possible" ? "both sides are possible" : s.branch.taken === "body" ? "<b>condition was true</b>: the indented block ran" : s.branch.taken === "none" ? "<b>condition was false</b>: the block was skipped" : "<b>the else side ran</b>"]);
+    if (s.loop && s.loop.iterations) rows.push(["iterations", "<b>" + nf.format(s.loop.iterations) + "</b> in this call"]);
+    if (s.executions && s.executions > 1 && s.type === "statement") rows.push(["executions", "this is the " + ord(s.occurrence || 1) + " of " + nf.format(s.executions) + " times this line ran in this call"]);
+    if (s.type === "statement") {
+      for (const [n, r] of Object.entries(st.names || {}).slice(0, 10)) rows.push([n, nameFact(n, r)]);
+      for (const c of (st.calls || []).slice(0, 6)) rows.push([c.call + "()", callFact(c)]);
+    }
+    for (const io of s.io || st.io || []) {
+      const op = io.op || io.direction, tgt = io.target || "";
+      const how = io.handled === "redirected" ? ", redirected to the sandbox" : io.handled === "blocked" ? ", blocked by safe mode" : io.handled === "working-copy" ? ", on a copy of the database" : io.handled === "shadowed" ? ", captured instead of written" : "";
+      rows.push([io.kind || "I/O", esc(op) + " <b>" + esc(tgt) + "</b>" + (io.rows ? ", " + nf.format(io.rows) + " rows" : "") + esc(how)]);
+    }
+    if (st.hint) rows.push(["type", "<code>" + esc(st.hint) + "</code>"]);
+    if (st.hints) for (const [k, v] of Object.entries(st.hints)) rows.push([k, "<code>" + esc(v) + "</code>"]);
+    if (st.generator) rows.push(["generator", "the body runs lazily, one item at a time, as the caller iterates"]);
+    if (st.comments && st.comments.length) rows.push(["comment", esc(st.comments.join(" "))]);
+    if (rows.length) h += '<div class="sec"><h3>Facts <small>' + (D.mode === "run" ? "measured in this run and read from the source" : "read from the source") + '</small></h3><dl class="facts">' +
+      rows.map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + v + "</dd>").join("") + "</dl></div>";
+  }
+  $("side").innerHTML = h;
+  const ex2 = $("expandLoop");
+  if (ex2) ex2.onclick = () => { expanded.has(s.id) ? expanded.delete(s.id) : expanded.add(s.id); const keep = ALL.indexOf(s); computeVisible(); setupScrub(); go(visible.indexOf(keep), false); };
+}
+
+/* ---------- crumbs and outline ---------- */
+function renderCrumbs(i) {
+  const st = pre[i].stack;
+  $("crumbs").innerHTML = '<span class="lbl">Call stack</span>' + (st.length ? st.map((f, k) => (k ? '<span class="sep">›</span>' : "") +
+    '<span class="crumb' + (k === st.length - 1 ? " top" : "") + (pre[i].err && k === st.length - 1 ? " err" : "") + '">' + esc(fnLabel(f)) + "</span>").join("") : '<span class="crumb">' + esc(D.entry || "module") + "</span>");
+}
+function renderOutline() {
+  $("olist").innerHTML = visible.map((idx, vi) => {
+    const s = ALL[idx];
+    const ex = (s.type === "statement" || s.type === "group") && stepStmts(s).some((x) => D.explanations[x]);
+    return '<li class="' + (s.type === "enter" ? "fn" : s.type === "return" ? "ret" : "") + (ex ? " ex" : "") + '" data-vi="' + vi + '"><button style="padding-left:' + (8 + 14 * (s.depth || 0)) + 'px">' +
+      esc((s.type === "return" ? "↩ " : "") + titleOf(s)) + "</button></li>";
+  }).join("");
+}
+function syncOutline() {
+  const ol = $("olist");
+  ol.querySelectorAll("li.cur").forEach((li) => li.classList.remove("cur"));
+  const li = ol.querySelector('li[data-vi="' + cur + '"]');
+  if (li) { li.classList.add("cur"); if ($("outline").classList.contains("open")) li.scrollIntoView({ block: "nearest" }); }
+}
+
+/* ---------- rendering a step ---------- */
+function stepAt(vi) { return ALL[visible[vi]]; }
+function renderStatic(vi) {
+  const s = stepAt(vi), i = visible[vi];
+  const loc = locOf(s);
+  peeking = false; $("peekbar").hidden = true;
+  showFile(loc.file);
+  $("code").querySelectorAll(".ln.dim, .ln.maybe, .ln.raise").forEach((el) => el.classList.remove("dim", "maybe", "raise"));
+  $("badges").innerHTML = "";
+  const hl = $("hl");
+  hl.classList.toggle("err", !!s.raised);
+  hl.style.top = lineTop(loc.a) + "px";
+  hl.style.height = (loc.b - loc.a + 1) * LH + "px";
+  const st = firstStmt(s);
+  // per-type marks in the code
+  if (s.branch && st) {
+    const blocks = st.blocks || {};
+    const range = (ids) => ids && ids.length ? [D.statements[ids[0]].line, D.statements[ids[ids.length - 1]].full_end] : null;
+    const body = range(blocks.body), other = range(blocks.orelse);
+    if (s.branch.taken === "possible") {
+      if (body) lineLines("maybe", body[0], body[1]);
+      if (other) lineLines("maybe", other[0], other[1]);
+      badge(loc.a, "p", "both paths possible");
+    } else {
+      const ran = s.branch.taken === "body";
+      if (!ran && body) lineLines("dim", body[0], body[1]);
+      if (ran && other) lineLines("dim", other[0], other[1]);
+      badge(loc.a, ran ? "t" : "f", ran ? "True" : "False");
+    }
+  }
+  if (s.loop && s.loop.iterations) badge(loc.a, "loop", "runs " + nf.format(s.loop.iterations) + "×");
+  if (s.type === "loop_summary") badge(loc.a, "loop", "×" + nf.format(s.iterations));
+  if (s.raised && (s.type === "statement" || s.type === "group")) { lineLines("raise", loc.a, loc.b); badge(loc.a, "x", s.raised); }
+  if (s.possible && st) lineLines("maybe", loc.a, loc.b);
+  if (st && (s.type === "statement" || s.type === "group") && !s.branch && !s.raised && !(s.loop && s.loop.iterations)) {
+    const lib = (st.calls || []).find((c) => c.origin === "package" || c.origin === "stdlib");
+    const io = (s.io || [])[0];
+    if (io) badge(loc.a, "io", (io.op || "") + " " + (io.target || "") + (io.handled === "blocked" ? ", blocked" : io.handled ? ", sandboxed" : ""));
+    else if (lib) badge(loc.a, "lib", lib.qualified + (lib.origin === "package" ? ", " + lib.package : ", stdlib"));
+  }
+  if (s.type === "unfocused_call") badge(loc.a, "f", "calls " + fnLabel(s.fn) + ", outside the focus");
+  $("codewrap").scrollTop = targetScroll(loc.a, loc.b);
+  renderSide(s, i);
+  renderCrumbs(i);
+  $("side").scrollTop = 0;
+  $("overlay").innerHTML = "";
+  syncUI();
+}
+
+/* overlay geometry, relative to .main */
+function geo() {
+  const m = $("main").getBoundingClientRect(), w = $("codewrap").getBoundingClientRect();
+  return { m, w, top: w.top - m.top, bottom: w.bottom - m.top, left: w.left - m.left, right: w.right - m.left };
+}
+function lineAnchor(g, line, scroll, x) {
+  const y = g.top + lineTop(line) + LH / 2 - scroll;
+  return { x: x != null ? x : g.right - 36, y: Math.max(g.top + 10, Math.min(g.bottom - 10, y)) };
+}
+function elAnchor(el, side) {
+  const m = $("main").getBoundingClientRect(), r = el.getBoundingClientRect();
+  return { x: (side === "left" ? r.left : r.right) - m.left, y: r.top + Math.min(r.height, 36) / 2 - m.top };
+}
+function mk(tag, attrs) { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function token(label, cls) {
+  const g = mk("g", { class: "tok " + (cls || "") });
+  const w = Math.min(320, label.length * 7.2 + 24);
+  g.appendChild(mk("rect", { x: -w / 2, y: -12, width: w, height: 24, rx: 12 }));
+  const t = mk("text", { "text-anchor": "middle", "dominant-baseline": "central", y: 1 });
+  t.textContent = label.length > 44 ? label.slice(0, 43) + "…" : label;
+  g.appendChild(t);
+  g.style.opacity = 0;
+  $("overlay").appendChild(g);
+  return g;
+}
+function curve(a, b, bulge) {
+  if (bulge) { const bx = Math.max(a.x, b.x) + bulge; return `M${a.x},${a.y} C${bx},${a.y} ${bx},${b.y} ${b.x},${b.y}`; }
+  const mx = (a.x + b.x) / 2;
+  return `M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
+}
+function travel(t, at, pathEl, tok, dur) {
+  const len = pathEl.getTotalLength(), st = { p: 0 };
+  const place = () => { const pt = pathEl.getPointAtLength(st.p * len); tok.setAttribute("transform", "translate(" + pt.x + "," + pt.y + ")"); };
+  place();
+  t.to(tok, { opacity: 1, duration: 0.12 }, at);
+  t.to(st, { p: 1, duration: dur, ease: "power1.inOut", onUpdate: place }, at);
+  t.to(tok, { opacity: 0, duration: 0.25 }, at + dur + 0.15);
+}
+function drawPath(t, at, d, color, dashed, dur) {
+  const p = mk("path", { d, stroke: color });
+  if (dashed) p.setAttribute("stroke-dasharray", "6 7");
+  $("overlay").appendChild(p);
+  const len = p.getTotalLength();
+  if (!dashed) { p.style.strokeDasharray = len; p.style.strokeDashoffset = len; t.to(p, { strokeDashoffset: 0, duration: dur || 0.5, ease: "power2.out" }, at); }
+  else t.from(p, { opacity: 0, duration: 0.3 }, at);
+  t.to(p, { opacity: 0, duration: 0.4 }, at + (dur || 0.5) + 1.0);
+  return p;
+}
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function firstChangeLabel(changes) {
+  const [k, v] = Object.entries(changes)[0];
+  const d = dfDesc(v);
+  return k + ": " + (d ? nf.format(d.n) + " " + d.unit : (v.type === "str" ? String(v.value || "").slice(0, 24) : ("value" in v ? String(v.value) : v.type)));
+}
+
+/* ---------- arrival animation ---------- */
+function arrive(fromVi, toVi) {
+  const prev = fromVi >= 0 ? stepAt(fromVi) : null, s = stepAt(toVi);
+  const before = { file: view.file, scroll: $("codewrap").scrollTop, top: parseFloat($("hl").style.top) || PAD, h: parseFloat($("hl").style.height) || LH };
+  const g0 = geo();
+  const prevLoc = prev ? locOf(prev) : null;
+  renderStatic(toVi);
+  const after = { file: view.file, scroll: $("codewrap").scrollTop, top: parseFloat($("hl").style.top), h: parseFloat($("hl").style.height) };
+  const g = geo();
+  if (reduced) {
+    const t = anim.timeline({ onComplete: afterArrive });
+    t.from($("side"), { opacity: 0, duration: 0.25 }, 0);
+    t.seek(0); t.play(); tl = t; return;
+  }
+  const t = anim.timeline({ onComplete: afterArrive });
+  const fileChanged = before.file !== after.file;
+  // highlight glide and scroll
+  const hl = $("hl"), wrap = $("codewrap");
+  if (!fileChanged) {
+    const o = { y: before.top, h: before.h, s: before.scroll };
+    t.fromTo(o, { y: before.top, h: before.h, s: before.scroll }, { y: after.top, h: after.h, s: after.scroll, duration: 0.5, ease: "power2.out",
+      onUpdate: () => { hl.style.top = o.y + "px"; hl.style.height = o.h + "px"; wrap.scrollTop = o.s; } }, 0);
+  } else {
+    t.from($("code"), { opacity: 0, x: 26, duration: 0.45, ease: "power2.out" }, 0.1);
+    t.from(hl, { opacity: 0, duration: 0.35 }, 0.35);
+  }
+  // side panel
+  const side = $("side");
+  t.from(side.querySelector(".shead"), { opacity: 0, y: 6, duration: 0.35, ease: "power2.out" }, 0.05);
+  const secs = [...side.querySelectorAll(".expl, .note, .sec, .btnrow")];
+  t.from(secs, { opacity: 0, y: 6, duration: 0.35, stagger: 0.07, ease: "power2.out" }, 0.18);
+  // badges in the code
+  const bdgs = [...$("badges").children];
+  t.from(bdgs, { opacity: 0, scale: 0.9, duration: 0.35, stagger: 0.1 }, 0.45);
+  // dimmed or possible blocks
+  const dims = [...$("code").querySelectorAll(".ln.dim")];
+  if (dims.length) t.from(dims, { opacity: 1, duration: 0.6 }, 0.5);
+  const maybes = [...$("code").querySelectorAll(".ln.maybe")];
+  if (maybes.length) t.from(maybes, { opacity: 0.4, duration: 0.5, stagger: Math.min(0.03, 0.5 / maybes.length) }, 0.45);
+  // chips in grouped steps
+  const chips = [...side.querySelectorAll(".chip")];
+  if (chips.length) t.from(chips, { opacity: 0, x: -8, duration: 0.3, stagger: Math.min(0.08, 1.2 / chips.length) }, 0.35);
+  let at = 0.55;
+  const amber = css("--hl-edge"), green = css("--green"), red = css("--red");
+  // calls: arrow from the call site to the definition, carrying the arguments
+  if (s.type === "enter" && prevLoc && !reduced) {
+    const a = fileChanged ? lineAnchor(g0, prevLoc.a, before.scroll) : lineAnchor(g, prevLoc.a, before.scroll);
+    const loc = locOf(s);
+    const b = lineAnchor(g, loc.a, after.scroll);
+    const argtxt = s.args && Object.keys(s.args).length ? Object.entries(s.args).slice(0, 2).map(([k, v]) => { const d = dfDesc(v); return k + ": " + (d ? nf.format(d.n) + " " + d.unit : ("value" in v ? String(v.value) : v.type)); }).join(", ") : "";
+    const p = drawPath(t, 0.05, curve(a, b, 60), amber, false, 0.5);
+    travel(t, 0.3, p, token(fnLabel(s.fn).replace("()", "") + (argtxt ? "(" + argtxt + ")" : "()")), 0.9);
+    const crumb = $("crumbs").querySelector(".crumb.top");
+    if (crumb) t.from(crumb, { opacity: 0, x: -10, duration: 0.35 }, 0.8);
+    at = 1.35;
+  }
+  // returns: the value travels back to the call site
+  if (s.type === "return" && prevLoc) {
+    const a = fileChanged ? lineAnchor(g0, prevLoc.a, before.scroll) : lineAnchor(g, prevLoc.a, before.scroll);
+    const loc = locOf(s);
+    const b = lineAnchor(g, loc.a, after.scroll);
+    const p = drawPath(t, 0.05, curve(a, b, 60), green, true, 0.4);
+    const v = s.value;
+    const lbl = s.raised ? s.raised : v ? (dfDesc(v) ? nf.format(dfDesc(v).n) + " " + dfDesc(v).unit : ("value" in v ? String(v.value) : v.type)) : "None";
+    travel(t, 0.2, p, token((s.yield ? "yield " : "") + lbl, s.raised ? "err" : "ret"), 0.85);
+    at = 1.15;
+  }
+  // assignments: the new value flies from the line into the variables panel
+  const changes = s.changes || (s.type === "statement" ? null : null);
+  if (changes && Object.keys(changes).length) {
+    const k0 = Object.keys(changes)[0];
+    const row = side.querySelector('.var[data-n="' + CSS.escape(k0) + '"]');
+    if (row) {
+      const loc = locOf(s);
+      const a = lineAnchor(g, loc.a, after.scroll, Math.min(g.right - 40, g.left + 360));
+      const b = elAnchor(row, "left");
+      const p = drawPath(t, at, curve(a, b), amber, true, 0.35);
+      travel(t, at + 0.1, p, token(firstChangeLabel(changes)), 0.75);
+      at += 0.75;
+    }
+  }
+  // pulses and counters on the variables panel
+  side.querySelectorAll(".var .pulse").forEach((pl, k) => t.fromTo(pl, { opacity: 0.95, scale: 1 }, { opacity: 0, scale: 1.02, duration: 0.7, immediateRender: false }, at + 0.05 * k));
+  side.querySelectorAll(".num[data-from]").forEach((n) => {
+    const from = +n.dataset.from, to = +n.dataset.to;
+    if (from === to) return;
+    const o = { v: from };
+    t.fromTo(o, { v: from }, { v: to, duration: 0.8, ease: "power2.out", onUpdate: () => { n.textContent = nf.format(Math.round(o.v)); } }, at);
+  });
+  side.querySelectorAll(".bar b[data-w0]").forEach((b) => {
+    const w0 = +b.dataset.w0, w1 = parseFloat(b.style.width), o = { w: w0 };
+    t.fromTo(o, { w: w0 }, { w: w1, duration: 0.8, ease: "power2.out", onUpdate: () => { b.style.width = o.w + "%"; } }, at);
+  });
+  side.querySelectorAll(".mini .new").forEach((c) => t.from(c, { opacity: 0, duration: 0.5 }, at + 0.2));
+  const iters = $("iters");
+  if (iters) { const o = { v: 0 }, to = +iters.dataset.to; t.fromTo(o, { v: 1 }, { v: to, duration: 1.1, ease: "power2.out", onUpdate: () => { iters.textContent = nf.format(Math.round(o.v)); } }, 0.4); }
+  if (s.raised) t.from(hl, { opacity: 0.2, duration: 0.2 }, 0.4).from(hl, { opacity: 0.2, duration: 0.2 }, 0.65);
+  t.to({}, { duration: 0.01 }, Math.max(at + 0.9, 1.0));
+  t.seek(0);
+  t.play();
+  tl = t;
+}
+
+/* ---------- navigation ---------- */
+function stopAnim() { if (tl) { tl.seek(tl.duration()); tl.pause(); tl = null; } $("overlay").innerHTML = ""; }
+function go(vi, animate) {
+  if (!visible.length) return;
+  vi = Math.max(0, Math.min(visible.length - 1, vi));
+  clearTimeout(holdTimer);
+  const from = cur;
+  stopAnim();
+  cur = vi;
+  if (animate && from >= 0 && vi === from + 1 || animate && from < 0) arrive(from, vi);
+  else if (animate && from >= 0 && vi !== from) arrive(from, vi);
+  else { renderStatic(vi); if (playing) afterArrive(); }
+}
+function afterArrive() {
+  tl = null;
+  if (!playing) return;
+  if (cur >= visible.length - 1) { setPlaying(false); return; }
+  // hold long enough to read the explanation; steps without one move on quickly
+  const ex = $("side").querySelector(".expl p:not(.none)");
+  const words = ((ex ? ex.textContent : "") + " " + ($("stitle") || {}).textContent).split(/\s+/).filter(Boolean).length;
+  const hold = Math.min(10, 1.4 + words / 3.6) * 1000 / parseFloat($("speed").value);
+  holdTimer = setTimeout(() => go(cur + 1, true), hold);
+}
+function stepOver() {
+  const s = stepAt(cur), d = s.depth || 0;
+  const nxt = stepAt(cur + 1);
+  if (!nxt || nxt.type !== "enter") return go(cur + 1, true);
+  for (let j = cur + 1; j < visible.length; j++) {
+    const x = stepAt(j);
+    if ((x.type === "return" && (x.depth || 0) === (nxt.depth || 0) && x.fn === nxt.fn) || ((x.depth || 0) <= d && x.type !== "enter" && j > cur + 1 && x.type !== "return")) return go(j, true);
+  }
+  go(visible.length - 1, false);
+}
+function stepOut() {
+  const s = stepAt(cur), d = s.depth || 0;
+  for (let j = cur + 1; j < visible.length; j++) {
+    const x = stepAt(j);
+    if (x.type === "return" && (x.depth || 0) === d && s.type !== "return") return go(j, true);
+    if ((x.depth || 0) < d) return go(j, true);
+  }
+  go(visible.length - 1, false);
+}
+function setPlaying(on) {
+  playing = on;
+  $("playIcon").setAttribute("d", on ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4v16l13-8z");
+  $("bPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  clearTimeout(holdTimer);
+  if (on) { if (cur >= visible.length - 1) go(0, false); if (!tl) afterArrive(); }
+}
+function syncUI() {
+  $("scrub").value = cur;
+  const ex = Object.keys(D.explanations || {}).length;
+  $("count").textContent = "Step " + (cur + 1) + " of " + visible.length;
+  $("hint").textContent = cur === 0 && !playing ? "Press → for the next step, or play" : "";
+  syncOutline();
+}
+function setupScrub() { $("scrub").max = Math.max(0, visible.length - 1); renderOutline(); }
+
+/* peeking at a definition without changing the step */
+function peek(where) {
+  const m = /^(.*):(\d+)$/.exec(where);
+  if (!m || !D.files[m[1]]) return;
+  stopAnim(); clearTimeout(holdTimer); if (playing) setPlaying(false);
+  const f = m[1], line = +m[2];
+  showFile(f);
+  $("badges").innerHTML = ""; $("hl").style.top = lineTop(line) + "px"; $("hl").style.height = LH + "px";
+  $("code").querySelectorAll(".ln.dim, .ln.maybe, .ln.raise").forEach((el) => el.classList.remove("dim", "maybe", "raise"));
+  $("codewrap").scrollTop = targetScroll(line, line);
+  peeking = true;
+  $("peekmsg").innerHTML = "Showing <code>" + esc(where) + "</code>";
+  $("peekbar").hidden = false;
+  if (!reduced) { const t = anim.timeline(); t.from($("hl"), { opacity: 0, duration: 0.3 }, 0).from($("peekbar"), { opacity: 0, duration: 0.25 }, 0); t.seek(0); t.play(); }
+}
+
+/* ---------- start ---------- */
+function start(data) {
+  D = data;
+  D.explanations = D.explanations || {}; D.notes = D.notes || {}; D.docstrings = D.docstrings || {};
+  precompute(); computeVisible();
+  $("app").hidden = false;
+  $("title").textContent = D.title || "Code walkthrough";
+  $("subtitle").textContent = D.subtitle || "";
+  document.title = D.title || "Code walkthrough";
+  const r = D.run || {}, b = $("badge");
+  b.className = "badge" + (D.mode === "scan" ? " scan" : r.status === "error" ? " err" : "");
+  b.querySelector("span").textContent = D.mode === "scan" ? "Read from the source, not executed" : r.status === "error" ? "Recorded run, stopped with an error" : "Recorded run" + (r.safe_mode === false ? ", live" : ", safe mode");
+  // file tabs, in the order the walkthrough first visits them
+  const order = [];
+  for (const s of ALL) { const f = (s.file || (locOf(s) || {}).file); if (f && !order.includes(f)) order.push(f); }
+  for (const f of Object.keys(D.files)) if (!order.includes(f)) order.push(f);
+  $("tabs").innerHTML = order.map((f) => '<button class="tab" role="tab" data-f="' + esc(f) + '">' + esc(f) + "</button>").join("");
+  $("tabs").addEventListener("click", (e) => { const t = e.target.closest(".tab"); if (t) peek(t.dataset.f + ":1"); });
+  setupScrub();
+  const kick = () => { go(0, false); if (!reduced) setTimeout(() => { if (cur === 0 && !tl) setPlaying(true); }, 1200); };
+  (document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise((res) => setTimeout(res, 1500))]) : Promise.resolve()).then(kick);
+
+  $("bNext").onclick = () => go(cur + 1, true);
+  $("bPrev").onclick = () => go(cur - 1, false);
+  $("bOver").onclick = stepOver;
+  $("bOut").onclick = stepOut;
+  $("bPlay").onclick = () => setPlaying(!playing);
+  $("scrub").oninput = (e) => { if (playing) setPlaying(false); go(+e.target.value, false); };
+  $("bOutline").onclick = () => { const o = $("outline"); const open = !o.classList.contains("open"); o.classList.toggle("open", open); o.setAttribute("aria-hidden", !open); if (open) syncOutline(); };
+  $("oClose").onclick = () => { $("outline").classList.remove("open"); $("outline").setAttribute("aria-hidden", "true"); };
+  $("olist").addEventListener("click", (e) => { const li = e.target.closest("li[data-vi]"); if (li) { if (playing) setPlaying(false); go(+li.dataset.vi, false); } });
+  $("peekBack").onclick = () => go(cur, false);
+  $("main").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-go]");
+    if (t) peek(t.dataset.go);
+  });
+  addEventListener("keydown", (e) => {
+    if (e.target.matches("input, select, textarea") && e.key !== "Escape") return;
+    if (e.key === "Escape") { $("oClose").click(); if (peeking) go(cur, false); return; }
+    if (e.key === "ArrowRight") { e.preventDefault(); if (playing) setPlaying(false); go(cur + 1, true); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); if (playing) setPlaying(false); go(cur - 1, false); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); if (playing) setPlaying(false); stepOver(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (playing) setPlaying(false); stepOut(); }
+    else if (e.key === " " && !e.target.matches("button")) { e.preventDefault(); setPlaying(!playing); }
+    else if (e.key === "Home") { go(0, false); }
+    else if (e.key === "End") { if (playing) setPlaying(false); go(visible.length - 1, false); }
+    else if (e.key === "o" || e.key === "O") $("bOutline").click();
+  });
+  $("codewrap").addEventListener("scroll", placeBadges, { passive: true });
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (!peeking) { stopAnim(); renderStatic(cur); } }, 150); });
+}
+
+window.codestoryWalkthrough = { go: (i, a) => go(i, a), get step() { return cur; }, get count() { return visible.length; }, get playing() { return playing; },
+  pause: () => setPlaying(false), finish: () => stopAnim(), get timeline() { return tl; } };
+boot();
+})();
+</script>
+</body>
+</html>

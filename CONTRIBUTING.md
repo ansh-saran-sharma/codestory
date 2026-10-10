@@ -37,13 +37,22 @@ approach first.
 If you send a pull request:
 
 - `codestory.py` must stay **standard library only** and work on **Python 3.8+**.
-- `player.html` must stay **a single file with no third-party code**, so stories work offline.
+- `player.html` and `walkthrough.html` must stay **single files with no third-party code**, so stories work
+  offline. Shared animation code goes in `engine.js`, which `build` embeds.
 - Keep the storyboard format backwards compatible, or bump `codestory.storyboard/1` and explain why.
 - Rebuild the examples and check them in a browser:
   ```bash
   python codestory.py build examples/weather-pipeline/storyboard.json -o examples/weather-pipeline/story.html
   python codestory.py build examples/log-check-scan/storyboard.json -o examples/log-check-scan/story.html
+  python codestory.py build examples/weather-pipeline/walkthrough.json --bundle examples/weather-pipeline/codestory_walkthrough_bundle.json -o examples/weather-pipeline/walkthrough.html
+  python codestory.py build examples/log-check-scan/walkthrough.json --bundle examples/log-check-scan/codestory_walkthrough_bundle.json -o examples/log-check-scan/walkthrough.html
   ```
+- Run the tests, on both tracing backends (the second simulates Python before 3.12):
+  ```bash
+  python -m unittest discover tests -v
+  CODESTORY_FORCE_SETPROFILE=1 python -m unittest discover tests
+  ```
+  The weather example's tests need pandas and are skipped without it.
 - If you change how `run` works, re-run the weather example in safe mode and confirm the real database
   file is unchanged:
   ```bash

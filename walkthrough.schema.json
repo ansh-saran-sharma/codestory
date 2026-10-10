@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "codestory.walkthrough/1",
+  "title": "codestory walkthrough",
+  "description": "The written part of a walkthrough: titles and explanations keyed by statement id. Everything else (source, steps, values, facts) comes from the bundle. Combine them with: python codestory.py build walkthrough.json --bundle codestory_bundle.json",
+  "type": "object",
+  "required": ["schema", "title", "explanations"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "codestory.walkthrough/1" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 80, "description": "What the program is, e.g. 'Daily weather pipeline, line by line'." },
+    "subtitle": { "type": "string", "maxLength": 200, "description": "One sentence: what this walkthrough covers (the run, or every path)." },
+    "entry": { "type": "string", "maxLength": 200, "description": "The command as the user would type it, without 'python', e.g. 'main.py --date 2026-10-01'." },
+    "explanations": {
+      "type": "object",
+      "description": "Keyed by statement id from the bundle's statements (e.g. 'etl/clean.py:15'). One explanation applies to every time that statement runs. For a grouped step, key it to the group's first statement.",
+      "propertyNames": { "pattern": "^.+:[0-9]+(#[0-9]+)?$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["title", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 60, "description": "Sentence case, starts with a verb: 'Drop rows with missing values'." },
+          "text": { "type": "string", "minLength": 1, "maxLength": 700, "description": "1–4 sentences for programmers: what it does, how, and anything non-obvious." }
+        }
+      }
+    },
+    "notes": {
+      "type": "object",
+      "description": "Optional remarks for one specific step, keyed by step id from the bundle's plan (e.g. 's57'), for things true of that occurrence only.",
+      "propertyNames": { "pattern": "^s[0-9]+$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 300 }
+    }
+  }
+}
